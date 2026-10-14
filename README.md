@@ -94,7 +94,7 @@ two timer rules (re-schedule vs. emit), and lane 2 of the timeline shows the fir
 ```
 operators/            the analyses: YAML state transition tables + generated traces
 src/core/             types, marble parser, simulator, zod schema, coverage, validation, YAML round-trip
-src/machines/         executable Mealy models (bufferCount, windowCount, debounceTime) + registry
+src/machines/         executable Mealy models (bufferCount, windowCount, debounceTime, windowTime) + registry
 src/render/           4-lane SVG renderer, standalone HTML page, design tokens
 src/artifacts/        Markdown artifacts (spec, table, traces) and the test-file generator
 src/cli/              commander CLI

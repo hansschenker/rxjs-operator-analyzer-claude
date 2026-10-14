@@ -1,0 +1,263 @@
+# windowTime — Mealy 6-tuple analysis (RxJS 7.8.2)
+#
+# Method: S (state space), S0 (initial state), Z (input alphabet), A (output alphabet),
+#         T : S × Z → S (transition function), G : S × Z → A* (output function).
+# The `transitions` list IS the State Transition Table. The rule ids are returned by the
+# executable model in src/machines/windowTime.ts; `analyze` cross-checks both and writes traces.
+#
+# Time-based AND higher-order: windows are opened and closed by timers. Two timer kinds appear in Z:
+# close_k (window wk's span elapsed) and tick (the creation interval). Time unit: one frame = one
+# virtual millisecond (TestScheduler run mode).
+operator: windowTime
+category: transformation
+signature: "windowTime<T>(windowTimeSpan: number, windowCreationInterval?: number | null, maxWindowSize?: number, scheduler?: SchedulerLike): OperatorFunction<T, Observable<T>>"
+source:
+  package: rxjs
+  version: 7.8.2
+  path: src/internal/operators/windowTime.ts
+description: |
+  Branches the source into windows (inner Observables) that open and close by time. Every window
+  completes windowTimeSpan frames after it opened. Without a windowCreationInterval the next window
+  opens the moment the previous one closes, so exactly one window is open at any time. With a
+  windowCreationInterval a new window opens every interval frames instead, so windows overlap when the
+  interval is shorter than the span and leave gaps (dropped values) when it is longer. maxWindowSize
+  closes a window early once it has relayed that many values. The first window is emitted during
+  subscribe.
+parameters:
+  - name: windowTimeSpan
+    type: number
+    description: Frames after which a window completes.
+  - name: windowCreationInterval
+    type: number | null
+    default: "null"
+    normalized: "interval = otherArgs[0] ?? null;  restartOnClose = ¬(interval ≠ null ∧ interval ≥ 0)   (windowTime.ts:108, 146-153)"
+    description: Interval, in frames, at which new windows are started. Absent means start the next window when one closes.
+  - name: maxWindowSize
+    type: number
+    default: "Infinity"
+    normalized: "maxWindowSize = otherArgs[1] || Infinity   (windowTime.ts:109) — 0 means unlimited"
+    description: Maximum number of values a window relays before it completes early.
+mealy:
+  stateSpace:
+    notation: "S = (records: {window, seen, close: Timer}[], tick: Timer | null) × phase,  phase ∈ {active, completed, errored, finalized}"
+    description: |
+      `records` holds the open windows oldest first, each with the number of values it has relayed and the
+      timer that will close it, written wk:seen@closeFrame. `tick` is the repeating creation-interval
+      timer, written tick@frame; it is null when the operator restarts windows on close instead.
+    components:
+      - { name: records, type: "{ window: Subject<T>, seen: ℕ, subs: Subscription }[]", description: "open windows, oldest first, each owning its close timer" }
+      - { name: tick, type: "Timer | null", description: "the repeating windowCreationInterval action, if any" }
+      - { name: phase, type: "active | completed | errored | finalized", description: "subscription lifecycle" }
+    invariants:
+      - "restartOnClose ⇒ exactly one window is open at any time while active"
+      - "every window closes exactly windowTimeSpan frames after it opened unless maxWindowSize closes it earlier (then its close timer is cancelled)"
+      - "with a creation interval, |records| ≤ ⌈windowTimeSpan / windowCreationInterval⌉"
+      - "a value is relayed to every window open at that moment; a window opened by that very value does not receive it (loop over a copy, line 163)"
+      - "timers armed during subscribe (tick and c1) run before source events of the same frame; timers armed later run after them (VirtualTimeScheduler creation order)"
+      - "after complete, error or finalize no further output is produced and every timer is cancelled"
+  initialState:
+    notation: "S0 = ([w1:0@windowTimeSpan], tick@windowCreationInterval | null, active)"
+    description: The creation-interval timer, if any, is armed first (line 150); then the first window is opened, emitted and given its close timer (lines 155, 130-143).
+  inputAlphabet:
+    - { symbol: subscribe, description: "downstream subscribes; timers are armed and the first window is emitted" }
+    - { symbol: value(v), description: "source emits a value (windowTime.ts:178)" }
+    - { symbol: timer(close_k), description: "window wk's span timer fires — closeWindow (windowTime.ts:118, 142)" }
+    - { symbol: timer(tick), description: "the creation-interval timer fires — startWindow (windowTime.ts:150)" }
+    - { symbol: complete, description: "source completes (windowTime.ts:187)" }
+    - { symbol: error(e), description: "source errors (windowTime.ts:189)" }
+    - { symbol: finalize, description: "subscription torn down (windowTime.ts:196)" }
+  outputAlphabet:
+    - { symbol: open(w), description: "subscriber.next(w.asObservable()) — a new window is emitted on the outer stream" }
+    - { symbol: w.next(v), description: "window Subject w relays the value v" }
+    - { symbol: w.complete, description: "window Subject w completes" }
+    - { symbol: w.error(e), description: "window Subject w errors" }
+    - { symbol: complete, description: "subscriber.complete() on the outer stream" }
+    - { symbol: error(e), description: "subscriber.error(e) on the outer stream" }
+  transitions:
+    - id: I0
+      input: subscribe
+      state: "—"
+      guard: always
+      next: "([w1:0@span], tick@interval | null, active)"
+      outputs: [ "open(w1)" ]
+      evidence: "windowTime.ts:113-116, 146-155, 130-143"
+      note: The timers armed here (tick first, then w1's close c1) sort before the source's own actions, so at a shared frame they run before a source value.
+    - id: V1
+      input: value(v)
+      state: "(records ≠ [], tick, active)"
+      guard: "no window reaches maxWindowSize"
+      next: "(records with seen + 1 for each, tick, active)"
+      outputs: [ "w.next(v) for each open w, oldest first" ]
+      evidence: "windowTime.ts:178-184"
+    - id: V2
+      input: value(v)
+      state: "(records ≠ [], tick, active)"
+      guard: "some window reaches maxWindowSize"
+      next: "(full windows removed and their close timers cancelled; restartOnClose ⇒ one new window per closed one, tick, active)"
+      outputs: [ "for each open w, oldest first: w.next(v), then if full: w.complete and, if restartOnClose, open(w_new)" ]
+      evidence: "windowTime.ts:180-184, 118-124, 130-143"
+      note: The window opened by this value does not receive it (the loop runs over a copy, line 163).
+    - id: V3
+      input: value(v)
+      state: "([], tick, active)"
+      guard: "no window open"
+      next: "unchanged"
+      outputs: []
+      evidence: "windowTime.ts:163, 180"
+      note: The value is dropped. Reachable only when windowCreationInterval > windowTimeSpan (or windows closed early by maxWindowSize).
+    - id: TC1
+      input: timer(close_k)
+      state: "(records ∋ wk, ∅, active)"
+      guard: "restartOnClose"
+      next: "((records \\ wk) ++ [w_new:0@now+span], ∅, active)"
+      outputs: [ "wk.complete", "open(w_new)" ]
+      evidence: "windowTime.ts:118-124, 152, 130-143"
+      note: Back-to-back windows — the replacement opens in the same frame and before any source value of that frame if c_k was armed during subscribe.
+    - id: TC2
+      input: timer(close_k)
+      state: "(records ∋ wk, tick, active)"
+      guard: "¬restartOnClose"
+      next: "(records \\ wk, tick, active)"
+      outputs: [ "wk.complete" ]
+      evidence: "windowTime.ts:118-123"
+    - id: TI1
+      input: timer(tick)
+      state: "(records, tick, active)"
+      guard: always
+      next: "(records ++ [w_new:0@now+span], tick@now+interval, active)"
+      outputs: [ "open(w_new)" ]
+      evidence: "windowTime.ts:150, 130-143; executeSchedule.ts:26-30"
+      note: startWindow() arms the new window's close timer before the tick re-arms itself, so when both fall on one frame the close runs first.
+    - id: C1
+      input: complete
+      state: "(records, tick, active)"
+      guard: always
+      next: "(∅, completed)"
+      outputs: [ "w.complete for each open w, oldest first", "complete" ]
+      evidence: "windowTime.ts:169-173, 187"
+      note: subscriber.unsubscribe() cancels every pending close timer and the tick.
+    - id: E1
+      input: error(e)
+      state: "(records, tick, active)"
+      guard: always
+      next: "(∅, errored)"
+      outputs: [ "w.error(e) for each open w, oldest first", "error(e)" ]
+      evidence: "windowTime.ts:169-173, 189"
+    - id: F1
+      input: finalize
+      state: "any"
+      guard: always
+      next: "⊥ (windowRecords := null, finalized)"
+      outputs: []
+      evidence: "windowTime.ts:196-199"
+    - id: X1
+      input: value(v)
+      state: "(·, ·, completed | errored)"
+      guard: "phase ≠ active, or a timer that belongs to no open window"
+      next: "unchanged"
+      outputs: []
+      reachable: false
+      evidence: "rxjs Subscriber.ts: a stopped Subscriber (isStopped) ignores further next/error/complete calls; windowTime.ts:121 unsubscribes a closed window's timer"
+      note: Listed for totality only.
+scenarios:
+  - name: span-only-3
+    title: "windowTime(3) — back-to-back 3-frame windows; b arrives in the frame w1 closes and lands in w2"
+    params: { windowTimeSpan: 3 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--y--z--w-|
+    expectedValues: { x: w1, y: w2, z: w3, w: w4 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@3])", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 3 } ], tick: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1:1@3])", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 3 } ], tick: null } }
+      - { frame: 3, kind: timer, input: timer(c1), rule: TC1, state: "([w2:0@6])", outputs: [ { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 0, closeAt: 6 } ], tick: null } }
+      - { frame: 3, kind: value, input: value(b), rule: V1, state: "([w2:1@6])", outputs: [ { kind: windowNext, label: b, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 1, closeAt: 6 } ], tick: null } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([w2:2@6])", outputs: [ { kind: windowNext, label: c, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 2, closeAt: 6 } ], tick: null } }
+      - { frame: 6, kind: timer, input: timer(c2), rule: TC1, state: "([w3:0@9])", outputs: [ { kind: windowComplete, window: w2 }, { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 0, closeAt: 9 } ], tick: null } }
+      - { frame: 7, kind: value, input: value(d), rule: V1, state: "([w3:1@9])", outputs: [ { kind: windowNext, label: d, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 1, closeAt: 9 } ], tick: null } }
+      - { frame: 9, kind: value, input: value(e), rule: V1, state: "([w3:2@9])", outputs: [ { kind: windowNext, label: e, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 2, closeAt: 9 } ], tick: null } }
+      - { frame: 9, kind: timer, input: timer(c3), rule: TC1, state: "([w4:0@12])", outputs: [ { kind: windowComplete, window: w3 }, { kind: windowOpen, window: w4 } ], data: { phase: active, windows: [ { id: w4, seen: 0, closeAt: 12 } ], tick: null } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: (∅) completed, outputs: [ { kind: windowComplete, window: w4 }, { kind: complete } ], data: { phase: completed } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: max-size-2
+    title: "windowTime(5, undefined, 2) — windows close early after two values and restart at once"
+    params: { windowTimeSpan: 5, maxWindowSize: 2 }
+    source: "-a-b-c-d-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--y---z-|
+    expectedValues: { x: w1, y: w2, z: w3 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@5])", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 5 } ], tick: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1:1@5])", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 5 } ], tick: null } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "([w2:0@8])", outputs: [ { kind: windowNext, label: b, window: w1 }, { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 0, closeAt: 8 } ], tick: null } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([w2:1@8])", outputs: [ { kind: windowNext, label: c, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 1, closeAt: 8 } ], tick: null } }
+      - { frame: 7, kind: value, input: value(d), rule: V2, state: "([w3:0@12])", outputs: [ { kind: windowNext, label: d, window: w2 }, { kind: windowComplete, window: w2 }, { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 0, closeAt: 12 } ], tick: null } }
+      - { frame: 9, kind: complete, input: complete, rule: C1, state: (∅) completed, outputs: [ { kind: windowComplete, window: w3 }, { kind: complete } ], data: { phase: completed } }
+      - { frame: 9, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: overlapping-span-3-interval-2
+    title: "windowTime(3, 2) — a new window every 2 frames, each 3 frames long: values land in up to two windows"
+    params: { windowTimeSpan: 3, windowCreationInterval: 2 }
+    source: "-a-b-c-d-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x-y-z-w-v|
+    expectedValues: { x: w1, y: w2, z: w3, w: w4, v: w5 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@3], tick@2)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 3 } ], tick: 2 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1:1@3], tick@2)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 3 } ], tick: 2 } }
+      - { frame: 2, kind: timer, input: timer(i1), rule: TI1, state: "([w1:1@3, w2:0@5], tick@4)", outputs: [ { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 3 }, { id: w2, seen: 0, closeAt: 5 } ], tick: 4 } }
+      - { frame: 3, kind: timer, input: timer(c1), rule: TC2, state: "([w2:0@5], tick@4)", outputs: [ { kind: windowComplete, window: w1 } ], data: { phase: active, windows: [ { id: w2, seen: 0, closeAt: 5 } ], tick: 4 } }
+      - { frame: 3, kind: value, input: value(b), rule: V1, state: "([w2:1@5], tick@4)", outputs: [ { kind: windowNext, label: b, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 1, closeAt: 5 } ], tick: 4 } }
+      - { frame: 4, kind: timer, input: timer(i2), rule: TI1, state: "([w2:1@5, w3:0@7], tick@6)", outputs: [ { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ { id: w2, seen: 1, closeAt: 5 }, { id: w3, seen: 0, closeAt: 7 } ], tick: 6 } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([w2:2@5, w3:1@7], tick@6)", outputs: [ { kind: windowNext, label: c, window: w2 }, { kind: windowNext, label: c, window: w3 } ], data: { phase: active, windows: [ { id: w2, seen: 2, closeAt: 5 }, { id: w3, seen: 1, closeAt: 7 } ], tick: 6 } }
+      - { frame: 5, kind: timer, input: timer(c2), rule: TC2, state: "([w3:1@7], tick@6)", outputs: [ { kind: windowComplete, window: w2 } ], data: { phase: active, windows: [ { id: w3, seen: 1, closeAt: 7 } ], tick: 6 } }
+      - { frame: 6, kind: timer, input: timer(i3), rule: TI1, state: "([w3:1@7, w4:0@9], tick@8)", outputs: [ { kind: windowOpen, window: w4 } ], data: { phase: active, windows: [ { id: w3, seen: 1, closeAt: 7 }, { id: w4, seen: 0, closeAt: 9 } ], tick: 8 } }
+      - { frame: 7, kind: value, input: value(d), rule: V1, state: "([w3:2@7, w4:1@9], tick@8)", outputs: [ { kind: windowNext, label: d, window: w3 }, { kind: windowNext, label: d, window: w4 } ], data: { phase: active, windows: [ { id: w3, seen: 2, closeAt: 7 }, { id: w4, seen: 1, closeAt: 9 } ], tick: 8 } }
+      - { frame: 7, kind: timer, input: timer(c3), rule: TC2, state: "([w4:1@9], tick@8)", outputs: [ { kind: windowComplete, window: w3 } ], data: { phase: active, windows: [ { id: w4, seen: 1, closeAt: 9 } ], tick: 8 } }
+      - { frame: 8, kind: timer, input: timer(i4), rule: TI1, state: "([w4:1@9, w5:0@11], tick@10)", outputs: [ { kind: windowOpen, window: w5 } ], data: { phase: active, windows: [ { id: w4, seen: 1, closeAt: 9 }, { id: w5, seen: 0, closeAt: 11 } ], tick: 10 } }
+      - { frame: 9, kind: complete, input: complete, rule: C1, state: (∅) completed, outputs: [ { kind: windowComplete, window: w4 }, { kind: windowComplete, window: w5 }, { kind: complete } ], data: { phase: completed } }
+      - { frame: 9, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: gap-span-2-interval-4
+    title: "windowTime(2, 4) — gaps: b and d arrive while no window is open and are dropped"
+    params: { windowTimeSpan: 2, windowCreationInterval: 4 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x---y---z--|
+    expectedValues: { x: w1, y: w2, z: w3 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@2], tick@4)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 2 } ], tick: 4 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1:1@2], tick@4)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 2 } ], tick: 4 } }
+      - { frame: 2, kind: timer, input: timer(c1), rule: TC2, state: "([], tick@4)", outputs: [ { kind: windowComplete, window: w1 } ], data: { phase: active, windows: [], tick: 4 } }
+      - { frame: 3, kind: value, input: value(b), rule: V3, state: "([], tick@4)", outputs: [], data: { phase: active, windows: [], tick: 4 } }
+      - { frame: 4, kind: timer, input: timer(i1), rule: TI1, state: "([w2:0@6], tick@8)", outputs: [ { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 0, closeAt: 6 } ], tick: 8 } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([w2:1@6], tick@8)", outputs: [ { kind: windowNext, label: c, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 1, closeAt: 6 } ], tick: 8 } }
+      - { frame: 6, kind: timer, input: timer(c2), rule: TC2, state: "([], tick@8)", outputs: [ { kind: windowComplete, window: w2 } ], data: { phase: active, windows: [], tick: 8 } }
+      - { frame: 7, kind: value, input: value(d), rule: V3, state: "([], tick@8)", outputs: [], data: { phase: active, windows: [], tick: 8 } }
+      - { frame: 8, kind: timer, input: timer(i2), rule: TI1, state: "([w3:0@10], tick@12)", outputs: [ { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 0, closeAt: 10 } ], tick: 12 } }
+      - { frame: 9, kind: value, input: value(e), rule: V1, state: "([w3:1@10], tick@12)", outputs: [ { kind: windowNext, label: e, window: w3 } ], data: { phase: active, windows: [ { id: w3, seen: 1, closeAt: 10 } ], tick: 12 } }
+      - { frame: 10, kind: timer, input: timer(c3), rule: TC2, state: "([], tick@12)", outputs: [ { kind: windowComplete, window: w3 } ], data: { phase: active, windows: [], tick: 12 } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: (∅) completed, outputs: [ { kind: complete } ], data: { phase: completed } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: error-mid-stream
+    title: "windowTime(3) — the source errors; the open window receives the error first"
+    params: { windowTimeSpan: 3 }
+    source: "-a-#"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--(y#)
+    expectedValues: { x: w1, y: w2 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@3])", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 3 } ], tick: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1:1@3])", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 1, closeAt: 3 } ], tick: null } }
+      - { frame: 3, kind: timer, input: timer(c1), rule: TC1, state: "([w2:0@6])", outputs: [ { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ { id: w2, seen: 0, closeAt: 6 } ], tick: null } }
+      - { frame: 3, kind: error, input: error(#), rule: E1, state: (∅) errored, outputs: [ { kind: windowError, label: "#", window: w2 }, { kind: error, label: "#" } ], data: { phase: errored } }
+      - { frame: 3, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: empty-source
+    title: "windowTime(3) — empty source: w1 completes empty, then the outer stream completes"
+    params: { windowTimeSpan: 3 }
+    source: "-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x|
+    expectedValues: { x: w1 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1:0@3])", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ { id: w1, seen: 0, closeAt: 3 } ], tick: null } }
+      - { frame: 1, kind: complete, input: complete, rule: C1, state: (∅) completed, outputs: [ { kind: windowComplete, window: w1 }, { kind: complete } ], data: { phase: completed } }
+      - { frame: 1, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }

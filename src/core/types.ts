@@ -61,6 +61,8 @@ export interface InitialResult<S> {
   readonly ruleId: string;
   readonly state: S;
   readonly outputs: readonly OutputEvent[];
+  /** Timers armed during subscribe; they run BEFORE source events of the same frame. */
+  readonly schedule?: readonly ScheduledInput[];
 }
 
 export interface StepResult<S> {

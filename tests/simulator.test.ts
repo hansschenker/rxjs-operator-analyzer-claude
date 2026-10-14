@@ -54,7 +54,38 @@ const echoMachine: Machine<EchoState, { delay: number }> = {
   isTerminal: (s) => s.phase === 'done',
 };
 
+/** Toy machine that arms a timer during subscribe (like windowTime's first close timer). */
+const bootMachine: Machine<{ booted: boolean }, Record<string, never>> = {
+  operator: 'boot',
+  normalizeParams: () => ({}),
+  describeParams: () => 'boot()',
+  initial: () => ({ ruleId: 'S0', state: { booted: false }, outputs: [], schedule: [{ id: 'boot', after: 2 }] }),
+  step(state, input) {
+    switch (input.kind) {
+      case 'timer':
+        return { ruleId: 'B1', state: { booted: true }, outputs: [{ kind: 'emit', value: 'boot', label: 'boot' }] };
+      case 'value':
+        return { ruleId: 'V1', state, outputs: [{ kind: 'emit', value: input.value, label: input.label }] };
+      case 'complete':
+        return { ruleId: 'C1', state, outputs: [{ kind: 'complete' }] };
+      case 'error':
+        return { ruleId: 'E1', state, outputs: [{ kind: 'error', error: input.error, label: '#' }] };
+      case 'finalize':
+        return { ruleId: 'F1', state, outputs: [] };
+    }
+  },
+  formatState: (s) => (s.booted ? 'booted' : 'booting'),
+  snapshot: (s) => s,
+  isTerminal: () => false,
+};
+
 describe('simulate', () => {
+  it('runs timers armed during subscribe before source events of the same frame', () => {
+    const result = simulate(bootMachine, { name: 't', params: {}, source: '--a|' });
+    expect(downstreamLog(result.downstream)).toEqual(['2 next(boot)', '2 next(a)', '3 complete']);
+    expect(result.steps.map((s) => s.input)).toEqual(['subscribe', 'timer(boot)', 'value(a)', 'complete', 'finalize']);
+  });
+
   it('delivers scheduled timers after source events of the same frame and honours cancellation', () => {
     const result = simulate(echoMachine, { name: 't', params: {}, source: '-a-b---|' });
     expect(result.steps.map((s) => `${s.frame}:${s.input}:${s.rule}`)).toEqual([

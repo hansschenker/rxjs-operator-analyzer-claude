@@ -1,8 +1,9 @@
-import { bufferCount, debounceTime, windowCount, type OperatorFunction } from 'rxjs';
+import { bufferCount, debounceTime, windowCount, windowTime, type OperatorFunction } from 'rxjs';
 import type { Machine } from '../core/types';
 import { bufferCountMachine } from './bufferCount';
 import { debounceTimeMachine } from './debounceTime';
 import { windowCountMachine } from './windowCount';
+import { windowTimeMachine } from './windowTime';
 
 /** A machine with its type parameters erased, for registry and CLI use. */
 export type AnyMachine = Machine<unknown, unknown>;
@@ -18,6 +19,21 @@ export interface RegistryEntry {
 function numberOr<T>(value: unknown, fallback: T): number | T {
   return typeof value === 'number' ? value : fallback;
 }
+
+const windowTimeRegistryEntry: RegistryEntry = {
+  machine: windowTimeMachine as unknown as AnyMachine,
+  higherOrder: true,
+  real(params): OperatorFunction<unknown, unknown> {
+    const span = numberOr(params.windowTimeSpan, 0);
+    const interval = params.windowCreationInterval;
+    const max = params.maxWindowSize;
+    if (typeof max === 'number') {
+      return windowTime<unknown>(span, typeof interval === 'number' ? interval : null, max);
+    }
+    if (typeof interval === 'number') return windowTime<unknown>(span, interval);
+    return windowTime<unknown>(span);
+  },
+};
 
 export const registry: Readonly<Record<string, RegistryEntry>> = {
   bufferCount: {
@@ -47,6 +63,7 @@ export const registry: Readonly<Record<string, RegistryEntry>> = {
       ) as OperatorFunction<unknown, unknown>;
     },
   },
+  windowTime: windowTimeRegistryEntry,
 };
 
 export function getMachine(operator: string): RegistryEntry {

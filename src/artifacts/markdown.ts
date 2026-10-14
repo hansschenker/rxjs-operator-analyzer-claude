@@ -223,7 +223,9 @@ export function laneRows(scenario: ScenarioSpec, steps: readonly TraceStep[]): L
 
   const timeline = Array.from({ length: frames }, (_, f) => String(f));
   const input = blank();
-  for (const e of source) put(input, e.frame, e.letter);
+  if (steps.length === 0) {
+    for (const e of source) put(input, e.frame, e.letter);
+  }
 
   const rule = blank();
   const state = blank();
@@ -231,7 +233,11 @@ export function laneRows(scenario: ScenarioSpec, steps: readonly TraceStep[]): L
   const windows = new Map<string, string[]>();
   for (const s of steps) {
     put(rule, s.frame, s.rule);
-    if (s.kind === 'timer') put(input, s.frame, s.input);
+    // Inputs in execution order (a timer armed during subscribe runs before a source value of the same frame).
+    if (s.kind === 'value') put(input, s.frame, s.input.replace(/^value\((.*)\)$/, '$1'));
+    else if (s.kind === 'complete') put(input, s.frame, '|');
+    else if (s.kind === 'error') put(input, s.frame, '#');
+    else if (s.kind === 'timer') put(input, s.frame, s.input);
     if (s.kind !== 'finalize' || !state[s.frame]) state[s.frame] = s.state;
     for (const o of s.outputs) {
       const label = outerLabel(o);

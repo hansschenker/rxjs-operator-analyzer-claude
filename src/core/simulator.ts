@@ -30,8 +30,13 @@ interface Queued {
   readonly timerId?: string;
 }
 
-/** Scheduled timers run after source events that share the same frame. */
-const TIMER_ORDER_BASE = 1_000_000;
+/**
+ * Same-frame ordering mirrors RxJS's VirtualTimeScheduler, which runs actions of one frame in
+ * creation order: timers armed during subscribe (before the source is subscribed) come first,
+ * then the source's own notifications, then timers armed by later steps.
+ */
+const SOURCE_ORDER_BASE = 1_000_000;
+const TIMER_ORDER_BASE = 2_000_000;
 
 export function toInputEvent(
   event: MarbleEvent,
@@ -61,8 +66,8 @@ function isTerminalOutput(outputs: readonly OutputEvent[]): boolean {
  * Run a machine over a scenario's source marble and return the full trace.
  *
  * Protocol (mirrors an RxJS subscription):
- *   frame 0        `subscribe`  -> machine.initial()
- *   source frames  `value` / `complete` / `error` in marble order, timers after them in the same frame
+ *   frame 0        `subscribe`  -> machine.initial(); timers it arms sort before the source's events
+ *   source frames  `value` / `complete` / `error` in marble order; timers armed by steps come after them
  *   after a terminal input or terminal output, a synthetic `finalize` is delivered in the same frame
  */
 export function simulate<S, P>(
@@ -78,9 +83,10 @@ export function simulate<S, P>(
 
   const queue: Queued[] = marble.map((e, i) => ({
     frame: e.frame,
-    order: i,
+    order: SOURCE_ORDER_BASE + i,
     input: toInputEvent(e, values),
   }));
+  let initialSeq = 0;
   let timerSeq = 0;
 
   const steps: TraceStep[] = [];
@@ -110,6 +116,14 @@ export function simulate<S, P>(
   const init = machine.initial(params);
   let state = init.state;
   record(0, 'subscribe', 'subscribe', init.ruleId, state, init.outputs);
+  for (const timer of init.schedule ?? []) {
+    queue.push({
+      frame: timer.after,
+      order: initialSeq++,
+      input: { kind: 'timer', id: timer.id },
+      timerId: timer.id,
+    });
+  }
 
   let terminated = isTerminalOutput(init.outputs) || machine.isTerminal(state);
   let currentFrame = 0;

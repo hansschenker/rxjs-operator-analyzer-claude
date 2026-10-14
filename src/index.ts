@@ -9,6 +9,7 @@ export * from './core/yaml-io';
 export * from './machines/bufferCount';
 export * from './machines/debounceTime';
 export * from './machines/windowCount';
+export * from './machines/windowTime';
 export * from './machines/registry';
 export * from './render/theme';
 export * from './render/timeline-svg';

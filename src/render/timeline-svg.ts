@@ -111,8 +111,8 @@ function collectLane2(source: readonly MarbleEvent[], steps: readonly TraceStep[
       items.push({ frame: s.frame, kind: 'timer', label: s.input.replace(/^timer\((.*)\)$/, '$1'), step: index });
     }
   });
-  const rank = (i: Lane2Item): number => (i.kind === 'timer' ? 1 : 0);
-  return items.sort((a, b) => a.frame - b.frame || rank(a) - rank(b));
+  // Same-frame items stack in execution order (step index), e.g. a subscribe-armed timer before a value.
+  return items.sort((a, b) => a.frame - b.frame || a.step - b.step);
 }
 
 interface WindowEvent {
