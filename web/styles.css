@@ -104,16 +104,19 @@ main {
 
 .card {
   background: var(--rxjs-color-surface);
-  border: 1px solid var(--rxjs-color-border);
+  border: 2px solid rgba(194, 24, 91, 0.5);
   border-radius: var(--rxjs-radius-lg);
   padding: 6px 8px 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
 }
 
 .card h2 {
   font-size: 13px;
-  margin: 0 0 6px;
-  padding: 2px 4px;
+  margin: -6px -8px 8px;
+  padding: 5px 12px;
+  background: var(--rxjs-color-primary-bg);
+  border-bottom: 1px solid rgba(194, 24, 91, 0.5);
   color: var(--rxjs-color-primary-dark);
 }
 
