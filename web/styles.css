@@ -99,12 +99,22 @@ body {
 main {
   max-width: 1500px;
   margin: 0 auto;
-  padding: 20px 24px 48px;
+  padding: 10px 24px 24px;
 }
 
-h2 {
-  font-size: 15px;
-  margin: 28px 0 8px;
+.card {
+  background: var(--rxjs-color-surface);
+  border: 1px solid var(--rxjs-color-border);
+  border-radius: var(--rxjs-radius-lg);
+  padding: 6px 8px 8px;
+  margin-bottom: 8px;
+}
+
+.card h2 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  padding: 2px 4px;
+  color: var(--rxjs-color-primary-dark);
 }
 
 code {
@@ -115,10 +125,7 @@ code {
 }
 
 .timeline {
-  background: var(--rxjs-color-surface);
-  border: 1px solid var(--rxjs-color-border);
-  border-radius: var(--rxjs-radius-lg);
-  padding: 8px;
+  padding: 2px 4px;
   overflow-x: auto;
 }
 
@@ -146,7 +153,7 @@ table {
 th,
 td {
   border: 1px solid var(--rxjs-color-border);
-  padding: 6px 8px;
+  padding: 4px 8px;
   text-align: left;
   vertical-align: top;
 }
