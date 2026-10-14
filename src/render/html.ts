@@ -1,6 +1,6 @@
 import { describeOutputs, scenarioCaption } from '../core/format';
 import type { OperatorSpec, ScenarioSpec, TraceStep } from '../core/types';
-import { tokensCss } from './theme';
+import { accentFor, theme, tokensCss } from './theme';
 
 export interface StandaloneHtmlInput {
   readonly spec: OperatorSpec;
@@ -85,6 +85,43 @@ ${firedRules ? `<td>${fired}</td>` : ''}
   });
   return `<div class="table-wrap"><table>
 <thead><tr><th>Rule</th><th>State s</th><th>Input z</th><th>Guard</th><th>T(s, z)</th><th>G(s, z)</th><th>Evidence</th>${firedRules ? '<th>Fired</th>' : ''}</tr></thead>
+<tbody>${rows.join('\n')}</tbody></table></div>`;
+}
+
+/** The timeline legend as compact HTML (for pages that render the SVG with `showLegend: false`). */
+export function renderLegendHtml(category: string): string {
+  const accent = accentFor(category);
+  const icon = (inner: string): string =>
+    `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">${inner}</svg>`;
+  const items: [string, string][] = [
+    ['input value', icon(`<circle cx="9" cy="9" r="6.5" fill="${theme.primaryBg}" stroke="${accent}" stroke-width="1.5"/>`)],
+    ['output value', icon(`<circle cx="9" cy="9" r="6.5" fill="${accent}"/>`)],
+    ['window opened', icon(`<rect x="1.5" y="3" width="15" height="12" rx="6" fill="${theme.white}" stroke="${accent}" stroke-width="1.5" stroke-dasharray="3 2"/>`)],
+    ['state segment', icon(`<rect x="1.5" y="3" width="15" height="12" rx="3" fill="${theme.primaryBg}" stroke="${accent}" stroke-width="1"/>`)],
+    ['rule id', icon(`<rect x="1.5" y="4" width="15" height="10" rx="5" fill="${accent}"/>`)],
+    ['complete', icon(`<line x1="9" y1="2" x2="9" y2="16" stroke="${theme.gray900}" stroke-width="3"/>`)],
+    ['error', icon(`<g stroke="${theme.accent}" stroke-width="2.5" stroke-linecap="round"><line x1="4" y1="4" x2="14" y2="14"/><line x1="4" y1="14" x2="14" y2="4"/></g>`)],
+    ['window lifetime', icon(`<line x1="2" y1="9" x2="16" y2="9" stroke="${theme.pink200}" stroke-width="4" stroke-linecap="round"/>`)],
+  ];
+  return `<ul class="legend">${items.map(([label, glyph]) => `<li>${glyph}<span>${esc(label)}</span></li>`).join('')}</ul>`;
+}
+
+/** Legend for a trace: only the rules it fired, in table order, with their T and G. */
+export function renderRuleLegendHtml(spec: OperatorSpec, steps: readonly TraceStep[]): string {
+  const fired = new Set(steps.map((s) => s.rule));
+  const rules = spec.mealy.transitions.filter((r) => fired.has(r.id));
+  if (rules.length === 0) return '';
+  const rows = rules.map(
+    (r) => `<tr data-rule="${esc(r.id)}">
+<td class="mono"><span class="badge">${esc(r.id)}</span></td>
+<td class="mono">${esc(r.input)}</td>
+<td>${esc(r.guard)}</td>
+<td class="mono">${esc(r.next)}</td>
+<td class="mono">${r.outputs.length === 0 ? 'none' : esc(r.outputs.join('; '))}</td>
+<td>${esc(r.note ?? '')}</td></tr>`,
+  );
+  return `<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Input z</th><th>Guard</th><th>T(s, z) → next state</th><th>G(s, z) → outputs</th><th>Note</th></tr></thead>
 <tbody>${rows.join('\n')}</tbody></table></div>`;
 }
 

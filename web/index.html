@@ -22,17 +22,14 @@
         <label>Scenario <select id="scenario"></select></label>
         <label>Frame width <input id="frame-width" type="range" min="0" max="110" step="5" value="0" /> <span id="frame-width-label">auto</span></label>
       </div>
+      <div class="legend-slot" id="legend"></div>
     </header>
     <main>
-      <section class="meta" id="meta"></section>
       <section class="timeline" id="timeline"></section>
-      <section class="detail" id="detail">Hover a marble, state segment or rule badge to see the transition (T) and output word (G).</section>
-      <h2>3. Execution trace — step by step</h2>
+      <h2>Execution trace — step by step</h2>
       <section id="steps"></section>
-      <h2>2. State transition table — T(s, z) and G(s, z)</h2>
+      <h2>Rules fired in this scenario — T(s, z) and G(s, z)</h2>
       <section id="rules"></section>
-      <h2>1. 6-tuple</h2>
-      <section id="tuple" class="tuple"></section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
