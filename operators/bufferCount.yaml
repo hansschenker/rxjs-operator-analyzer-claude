@@ -1,0 +1,249 @@
+# bufferCount — Mealy 6-tuple analysis (RxJS 7.8.2)
+#
+# Method: S (state space), S0 (initial state), Z (input alphabet), A (output alphabet),
+#         T : S × Z → S (transition function), G : S × Z → A* (output function).
+# The `transitions` list IS the State Transition Table: one row per guarded (state, input) pair
+# giving T (`next`) and G (`outputs`). The rule ids are the ones returned by the executable model
+# in src/machines/bufferCount.ts; `analyze` cross-checks both and writes the traces below.
+operator: bufferCount
+category: transformation
+signature: "bufferCount<T>(bufferSize: number, startBufferEvery: number | null = null): OperatorFunction<T, T[]>"
+source:
+  package: rxjs
+  version: 7.8.2
+  path: src/internal/operators/bufferCount.ts
+description: |
+  Buffers the source values and emits each buffer as an array once it holds `bufferSize` values. A new
+  buffer is started on the first value and then every `startBufferEvery` values, so buffers overlap
+  when startBufferEvery < bufferSize, are back-to-back when equal, and leave gaps (dropped values)
+  when startBufferEvery > bufferSize. On completion every open buffer is flushed; on error open
+  buffers are discarded.
+parameters:
+  - name: bufferSize
+    type: number
+    description: Maximum number of values a buffer collects before it is emitted.
+  - name: startBufferEvery
+    type: number | null
+    default: "null"
+    normalized: "N = startBufferEvery ?? bufferSize   (bufferCount.ts:60)"
+    description: Interval, in source values, at which a new buffer is started.
+mealy:
+  stateSpace:
+    notation: "S = (buffers: T[][], count: ℕ) × phase,  phase ∈ {active, completed, errored, finalized}"
+    description: |
+      `buffers` holds every buffer that is still collecting values, oldest first; `count` is the number of
+      source values seen so far and drives the start-of-buffer cycle (count mod N).
+    components:
+      - { name: buffers, type: "T[][]", description: "open (not yet emitted) buffers, oldest first" }
+      - { name: count, type: "ℕ", description: "number of source values received so far" }
+      - { name: phase, type: "active | completed | errored | finalized", description: "subscription lifecycle" }
+    invariants:
+      - "∀ b ∈ buffers: 0 < |b| < bufferSize  (a full buffer is emitted and removed within the same step)"
+      - "|buffers| ≤ ⌈bufferSize / N⌉"
+      - "a new buffer opens exactly when count mod N = 0, with count taken before the increment"
+      - "no buffer is ever emitted empty"
+      - "after complete, error or finalize no further output is produced"
+  initialState:
+    notation: "S0 = ([], 0, active)"
+    description: No buffer exists until the first value arrives (bufferCount.ts:63-64).
+  inputAlphabet:
+    - { symbol: subscribe, description: "downstream subscribes; the operator initialises its closure state" }
+    - { symbol: value(v), description: "source emits a value (bufferCount.ts:69)" }
+    - { symbol: complete, description: "source completes (bufferCount.ts:103)" }
+    - { symbol: error(e), description: "source errors; passed straight through (bufferCount.ts:112)" }
+    - { symbol: finalize, description: "subscription torn down (bufferCount.ts:113)" }
+  outputAlphabet:
+    - { symbol: emit(buffer), description: "subscriber.next(buffer) with a T[]" }
+    - { symbol: complete, description: "subscriber.complete()" }
+    - { symbol: error(e), description: "subscriber.error(e)" }
+  transitions:
+    - id: S0
+      input: subscribe
+      state: "—"
+      guard: always
+      next: "([], 0, active)"
+      outputs: []
+      evidence: "bufferCount.ts:63-64"
+      note: Parameter normalisation N = startBufferEvery ?? bufferSize happens once, before subscription (line 60).
+    - id: V1
+      input: value(v)
+      state: "(buffers, count, active)"
+      guard: "count mod N = 0 ∧ no buffer reaches bufferSize after appending v"
+      next: "((buffers ++ [[]]) ⊕ v, count + 1, active)"
+      outputs: []
+      evidence: "bufferCount.ts:75-77 (open), 80-81 (append)"
+      note: "⊕ v appends v to every open buffer."
+    - id: V2
+      input: value(v)
+      state: "(buffers, count, active)"
+      guard: "count mod N = 0 ∧ some buffer reaches bufferSize after appending v"
+      next: "(((buffers ++ [[]]) ⊕ v) \\ full, count + 1, active)"
+      outputs: [ "emit(b) for each full b, oldest first" ]
+      evidence: "bufferCount.ts:75-77, 80-90, 93-101"
+      note: Happens with bufferSize = 1 (the new buffer is full at once) or with overlapping buffers.
+    - id: V3
+      input: value(v)
+      state: "(buffers ≠ [], count, active)"
+      guard: "count mod N ≠ 0 ∧ no buffer reaches bufferSize after appending v"
+      next: "(buffers ⊕ v, count + 1, active)"
+      outputs: []
+      evidence: "bufferCount.ts:80-81"
+    - id: V4
+      input: value(v)
+      state: "(buffers ≠ [], count, active)"
+      guard: "count mod N ≠ 0 ∧ some buffer reaches bufferSize after appending v"
+      next: "((buffers ⊕ v) \\ full, count + 1, active)"
+      outputs: [ "emit(b) for each full b, oldest first" ]
+      evidence: "bufferCount.ts:80-90, 93-101"
+      note: Full buffers are collected in `toEmit` first and emitted after the loop so the list is not mutated while iterating (lines 82-90).
+    - id: V5
+      input: value(v)
+      state: "([], count, active)"
+      guard: "count mod N ≠ 0 ∧ no buffer is open"
+      next: "([], count + 1, active)"
+      outputs: []
+      evidence: "bufferCount.ts:75-77 (no open), 80 (empty loop)"
+      note: The value is dropped. Reachable only when N > bufferSize (gaps between buffers).
+    - id: C1
+      input: complete
+      state: "(buffers ≠ [], count, active)"
+      guard: always
+      next: "(∅, count, completed)"
+      outputs: [ "emit(b) for each open b, oldest first", "complete" ]
+      evidence: "bufferCount.ts:103-110"
+      note: Partial buffers are flushed; this is the only way a buffer shorter than bufferSize is emitted.
+    - id: C2
+      input: complete
+      state: "([], count, active)"
+      guard: always
+      next: "(∅, count, completed)"
+      outputs: [ "complete" ]
+      evidence: "bufferCount.ts:103-110"
+    - id: E1
+      input: error(e)
+      state: "(buffers, count, active)"
+      guard: always
+      next: "(∅, count, errored)"
+      outputs: [ "error(e)" ]
+      evidence: "bufferCount.ts:112 (error handler undefined ⇒ pass-through)"
+      note: Open buffers are discarded, never emitted.
+    - id: F1
+      input: finalize
+      state: "any"
+      guard: always
+      next: "⊥ (buffers := null, finalized)"
+      outputs: []
+      evidence: "bufferCount.ts:113-116"
+    - id: X1
+      input: value(v)
+      state: "(·, ·, completed | errored)"
+      guard: "phase ≠ active"
+      next: "unchanged"
+      outputs: []
+      reachable: false
+      evidence: "rxjs Subscriber.ts: a stopped Subscriber (isStopped) ignores further next/error/complete calls"
+      note: Listed for totality only. RxJS subscribers never deliver inputs after a terminal notification.
+scenarios:
+  - name: overlapping-2-1
+    title: "bufferCount(2, 1) — sliding pairs (the worked example from docs/)"
+    params: { bufferSize: 2, startBufferEvery: 1 }
+    source: "-a-b-c-d-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x-y-z-(w|)
+    expectedValues: { x: [ a, b ], y: [ b, c ], z: [ c, d ], w: [ d ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([[a]], 1)", outputs: [], data: { phase: active, buffers: [ [ a ] ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "([[b]], 2)", outputs: [ { kind: emit, label: "[a,b]" } ], data: { phase: active, buffers: [ [ b ] ], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V2, state: "([[c]], 3)", outputs: [ { kind: emit, label: "[b,c]" } ], data: { phase: active, buffers: [ [ c ] ], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V2, state: "([[d]], 4)", outputs: [ { kind: emit, label: "[c,d]" } ], data: { phase: active, buffers: [ [ d ] ], count: 4 } }
+      - { frame: 9, kind: complete, input: complete, rule: C1, state: "(∅, 4) completed", outputs: [ { kind: emit, label: "[d]" }, { kind: complete } ], data: { phase: completed, count: 4 } }
+      - { frame: 9, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: non-overlapping-2
+    title: "bufferCount(2) — back-to-back pairs, trailing partial buffer flushed on complete"
+    params: { bufferSize: 2 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x---y---(z|)
+    expectedValues: { x: [ a, b ], y: [ c, d ], z: [ e ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([[a]], 1)", outputs: [], data: { phase: active, buffers: [ [ a ] ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([], 2)", outputs: [ { kind: emit, label: "[a,b]" } ], data: { phase: active, buffers: [], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([[c]], 3)", outputs: [], data: { phase: active, buffers: [ [ c ] ], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V4, state: "([], 4)", outputs: [ { kind: emit, label: "[c,d]" } ], data: { phase: active, buffers: [], count: 4 } }
+      - { frame: 9, kind: value, input: value(e), rule: V1, state: "([[e]], 5)", outputs: [], data: { phase: active, buffers: [ [ e ] ], count: 5 } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: "(∅, 5) completed", outputs: [ { kind: emit, label: "[e]" }, { kind: complete } ], data: { phase: completed, count: 5 } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: skip-less-than-size-3-2
+    title: "bufferCount(3, 2) — consecutive buffers share one value"
+    params: { bufferSize: 3, startBufferEvery: 2 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: -----x---y-(z|)
+    expectedValues: { x: [ a, b, c ], y: [ c, d, e ], z: [ e ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([[a]], 1)", outputs: [], data: { phase: active, buffers: [ [ a ] ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V3, state: "([[a,b]], 2)", outputs: [], data: { phase: active, buffers: [ [ a, b ] ], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V2, state: "([[c]], 3)", outputs: [ { kind: emit, label: "[a,b,c]" } ], data: { phase: active, buffers: [ [ c ] ], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V3, state: "([[c,d]], 4)", outputs: [], data: { phase: active, buffers: [ [ c, d ] ], count: 4 } }
+      - { frame: 9, kind: value, input: value(e), rule: V2, state: "([[e]], 5)", outputs: [ { kind: emit, label: "[c,d,e]" } ], data: { phase: active, buffers: [ [ e ] ], count: 5 } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: "(∅, 5) completed", outputs: [ { kind: emit, label: "[e]" }, { kind: complete } ], data: { phase: completed, count: 5 } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: skip-greater-than-size-2-3
+    title: "bufferCount(2, 3) — gap: every third value is dropped"
+    params: { bufferSize: 2, startBufferEvery: 3 }
+    source: "-a-b-c-d-e-f-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x-----y---|
+    expectedValues: { x: [ a, b ], y: [ d, e ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([[a]], 1)", outputs: [], data: { phase: active, buffers: [ [ a ] ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([], 2)", outputs: [ { kind: emit, label: "[a,b]" } ], data: { phase: active, buffers: [], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V5, state: "([], 3)", outputs: [], data: { phase: active, buffers: [], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V1, state: "([[d]], 4)", outputs: [], data: { phase: active, buffers: [ [ d ] ], count: 4 } }
+      - { frame: 9, kind: value, input: value(e), rule: V4, state: "([], 5)", outputs: [ { kind: emit, label: "[d,e]" } ], data: { phase: active, buffers: [], count: 5 } }
+      - { frame: 11, kind: value, input: value(f), rule: V5, state: "([], 6)", outputs: [], data: { phase: active, buffers: [], count: 6 } }
+      - { frame: 13, kind: complete, input: complete, rule: C2, state: "(∅, 6) completed", outputs: [ { kind: complete } ], data: { phase: completed, count: 6 } }
+      - { frame: 13, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: size-1
+    title: "bufferCount(1) — every value is immediately a full buffer"
+    params: { bufferSize: 1 }
+    source: "-a-b-c-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: -x-y-z-|
+    expectedValues: { x: [ a ], y: [ b ], z: [ c ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V2, state: "([], 1)", outputs: [ { kind: emit, label: "[a]" } ], data: { phase: active, buffers: [], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "([], 2)", outputs: [ { kind: emit, label: "[b]" } ], data: { phase: active, buffers: [], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V2, state: "([], 3)", outputs: [ { kind: emit, label: "[c]" } ], data: { phase: active, buffers: [], count: 3 } }
+      - { frame: 7, kind: complete, input: complete, rule: C2, state: "(∅, 3) completed", outputs: [ { kind: complete } ], data: { phase: completed, count: 3 } }
+      - { frame: 7, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: error-mid-stream
+    title: "bufferCount(2) — source errors; the open buffer [c] is discarded"
+    params: { bufferSize: 2 }
+    source: "-a-b-c-#"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x---#
+    expectedValues: { x: [ a, b ] }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([[a]], 1)", outputs: [], data: { phase: active, buffers: [ [ a ] ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([], 2)", outputs: [ { kind: emit, label: "[a,b]" } ], data: { phase: active, buffers: [], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([[c]], 3)", outputs: [], data: { phase: active, buffers: [ [ c ] ], count: 3 } }
+      - { frame: 7, kind: error, input: error(#), rule: E1, state: "(∅, 3) errored", outputs: [ { kind: error, label: "#" } ], data: { phase: errored, count: 3 } }
+      - { frame: 7, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: empty-source
+    title: "bufferCount(2) — empty source completes without emitting"
+    params: { bufferSize: 2 }
+    source: "-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: -|
+    expectedValues: {}
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "([], 0)", outputs: [], data: { phase: active, buffers: [], count: 0 } }
+      - { frame: 1, kind: complete, input: complete, rule: C2, state: "(∅, 0) completed", outputs: [ { kind: complete } ], data: { phase: completed, count: 0 } }
+      - { frame: 1, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }

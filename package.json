@@ -1,0 +1,52 @@
+{
+  "name": "rxjs-operator-analyzer",
+  "version": "0.1.0",
+  "description": "Formal RxJS operator analysis with the Mealy 6-tuple method: YAML state transition tables, execution traces, 4-lane timelines and generated tests.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "rxjs-operator-analyzer": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "operators",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && tsup && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "tsx src/cli/index.ts",
+    "validate": "tsx src/cli/index.ts validate",
+    "analyze": "tsx src/cli/index.ts analyze",
+    "generate": "tsx src/cli/index.ts generate",
+    "check": "tsx src/cli/index.ts generate --check && vitest run"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "rxjs": "^7.8.2",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

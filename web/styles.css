@@ -1,0 +1,222 @@
+:root {
+  --rxjs-color-primary: #c2185b;
+  --rxjs-color-primary-light: #d81b60;
+  --rxjs-color-primary-dark: #ad1457;
+  --rxjs-color-primary-bg: #fce4ec;
+  --rxjs-color-accent: #d32f2f;
+  --rxjs-color-surface: #ffffff;
+  --rxjs-color-background: #fafafa;
+  --rxjs-color-text: #212121;
+  --rxjs-color-text-secondary: #757575;
+  --rxjs-color-border: #e0e0e0;
+  --rxjs-color-code-bg: #1a1a2e;
+  --rxjs-color-code-text: #e0e0e0;
+  --rxjs-font-sans: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --rxjs-font-mono: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
+  --rxjs-radius-sm: 4px;
+  --rxjs-radius-md: 6px;
+  --rxjs-radius-lg: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--rxjs-color-background);
+  color: var(--rxjs-color-text);
+  font-family: var(--rxjs-font-sans);
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--rxjs-color-surface);
+  border-bottom: 3px solid var(--rxjs-color-primary);
+}
+
+.brand h1 {
+  margin: 0;
+  font-family: var(--rxjs-font-mono);
+  font-size: 20px;
+  color: var(--rxjs-color-primary);
+}
+
+.brand p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--rxjs-color-text-secondary);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.controls select {
+  font-family: var(--rxjs-font-mono);
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--rxjs-color-border);
+  border-radius: var(--rxjs-radius-sm);
+  background: var(--rxjs-color-surface);
+}
+
+main {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 28px 0 8px;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--rxjs-color-text-secondary);
+  margin-bottom: 12px;
+}
+
+.meta strong {
+  color: var(--rxjs-color-text);
+}
+
+code {
+  font-family: var(--rxjs-font-mono);
+  background: var(--rxjs-color-primary-bg);
+  padding: 1px 5px;
+  border-radius: var(--rxjs-radius-sm);
+}
+
+.timeline {
+  background: var(--rxjs-color-surface);
+  border: 1px solid var(--rxjs-color-border);
+  border-radius: var(--rxjs-radius-lg);
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.timeline svg {
+  display: block;
+  max-width: none;
+}
+
+.timeline svg [data-step] {
+  cursor: pointer;
+}
+
+.timeline svg .hl rect,
+.timeline svg .hl circle {
+  filter: drop-shadow(0 0 3px rgba(194, 24, 91, 0.9));
+}
+
+.detail {
+  margin-top: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  background: var(--rxjs-color-surface);
+  border-left: 4px solid var(--rxjs-color-primary);
+  border-radius: var(--rxjs-radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail pre {
+  margin: 6px 0 0;
+  font-family: var(--rxjs-font-mono);
+  font-size: 12px;
+  background: var(--rxjs-color-code-bg);
+  color: var(--rxjs-color-code-text);
+  padding: 8px 10px;
+  border-radius: var(--rxjs-radius-sm);
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  background: var(--rxjs-color-surface);
+}
+
+th,
+td {
+  border: 1px solid var(--rxjs-color-border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--rxjs-color-primary-bg);
+}
+
+td.mono,
+th.mono {
+  font-family: var(--rxjs-font-mono);
+  white-space: nowrap;
+}
+
+tr.active {
+  background: #fff3f8;
+  outline: 2px solid var(--rxjs-color-primary);
+}
+
+.badge {
+  display: inline-block;
+  font-family: var(--rxjs-font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+  background: var(--rxjs-color-primary);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.badge.unreachable {
+  background: var(--rxjs-color-text-secondary);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.tuple {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.tuple article {
+  background: var(--rxjs-color-surface);
+  border: 1px solid var(--rxjs-color-border);
+  border-radius: var(--rxjs-radius-md);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.tuple h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--rxjs-color-primary);
+}
+
+.tuple ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.empty {
+  padding: 24px;
+  color: var(--rxjs-color-text-secondary);
+}

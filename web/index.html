@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RxJS Operator Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <h1>RxJS Operator Analyzer</h1>
+        <p>Mealy 6-tuple · State Transition Table · 4-lane timeline</p>
+      </div>
+      <div class="controls">
+        <label>Operator <select id="operator"></select></label>
+        <label>Scenario <select id="scenario"></select></label>
+        <label>Frame width <input id="frame-width" type="range" min="0" max="110" step="5" value="0" /> <span id="frame-width-label">auto</span></label>
+      </div>
+    </header>
+    <main>
+      <section class="meta" id="meta"></section>
+      <section class="timeline" id="timeline"></section>
+      <section class="detail" id="detail">Hover a marble, state segment or rule badge to see the transition (T) and output word (G).</section>
+      <h2>3. Execution trace — step by step</h2>
+      <section id="steps"></section>
+      <h2>2. State transition table — T(s, z) and G(s, z)</h2>
+      <section id="rules"></section>
+      <h2>1. 6-tuple</h2>
+      <section id="tuple" class="tuple"></section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

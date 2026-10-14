@@ -1,0 +1,238 @@
+# windowCount — Mealy 6-tuple analysis (RxJS 7.8.2)
+#
+# Method: S (state space), S0 (initial state), Z (input alphabet), A (output alphabet),
+#         T : S × Z → S (transition function), G : S × Z → A* (output function).
+# The `transitions` list IS the State Transition Table. The rule ids are returned by the
+# executable model in src/machines/windowCount.ts; `analyze` cross-checks both and writes traces.
+#
+# windowCount is the higher-order twin of bufferCount: instead of arrays it emits live windows
+# (Subjects). The output alphabet therefore distinguishes the outer stream (open(w), complete,
+# error) from what each window relays (w.next(v), w.complete, w.error).
+operator: windowCount
+category: transformation
+signature: "windowCount<T>(windowSize: number, startWindowEvery: number = 0): OperatorFunction<T, Observable<T>>"
+source:
+  package: rxjs
+  version: 7.8.2
+  path: src/internal/operators/windowCount.ts
+description: |
+  Branches the source into windows (inner Observables) of up to `windowSize` values. The first window
+  is emitted immediately on subscribe; a new window is opened — and emitted downstream — after every
+  `startWindowEvery` source values, and the oldest window completes once it has received `windowSize`
+  values. Every value is relayed live to every open window, so windows overlap when startWindowEvery <
+  windowSize and leave gaps (dropped values) when startWindowEvery > windowSize. A window opened on
+  the last value completes empty.
+parameters:
+  - name: windowSize
+    type: number
+    description: Maximum number of values emitted by each window.
+  - name: startWindowEvery
+    type: number
+    default: "0"
+    normalized: "N = startWindowEvery > 0 ? startWindowEvery : windowSize   (windowCount.ts:69)"
+    description: Interval, in source values, at which a new window is started.
+mealy:
+  stateSpace:
+    notation: "S = (windows: Subject<T>[], count: ℕ) × phase,  phase ∈ {active, completed, errored, finalized}"
+    description: |
+      `windows` holds the open window Subjects, oldest first (modelled by their ids w1, w2, …); `count` is
+      the number of source values seen so far. Closing is decided from c = count − windowSize + 1 and
+      opening from count + 1, both relative to N.
+    components:
+      - { name: windows, type: "Subject<T>[]", description: "open windows, oldest first" }
+      - { name: count, type: "ℕ", description: "number of source values received so far" }
+      - { name: phase, type: "active | completed | errored | finalized", description: "subscription lifecycle" }
+    invariants:
+      - "|windows| ≤ ⌈windowSize / N⌉"
+      - "window w_k (k ≥ 1) receives the source values with indices (k−1)·N … (k−1)·N + windowSize − 1 and completes on the last of them"
+      - "every open window receives every value; a value arriving while no window is open is dropped (only when N > windowSize)"
+      - "within one value step the oldest window is closed before a new one is opened"
+      - "after complete, error or finalize no further output is produced"
+  initialState:
+    notation: "S0 = ([w1], 0, active)"
+    description: The first window Subject exists before any value and is emitted during subscribe (windowCount.ts:72-77).
+  inputAlphabet:
+    - { symbol: subscribe, description: "downstream subscribes; the first window is created and emitted" }
+    - { symbol: value(v), description: "source emits a value (windowCount.ts:82)" }
+    - { symbol: complete, description: "source completes (windowCount.ts:110)" }
+    - { symbol: error(e), description: "source errors (windowCount.ts:116)" }
+    - { symbol: finalize, description: "subscription torn down (windowCount.ts:122)" }
+  outputAlphabet:
+    - { symbol: open(w), description: "subscriber.next(w.asObservable()) — a new window is emitted on the outer stream" }
+    - { symbol: w.next(v), description: "window Subject w relays the value v" }
+    - { symbol: w.complete, description: "window Subject w completes" }
+    - { symbol: w.error(e), description: "window Subject w errors" }
+    - { symbol: complete, description: "subscriber.complete() on the outer stream" }
+    - { symbol: error(e), description: "subscriber.error(e) on the outer stream" }
+  transitions:
+    - id: I0
+      input: subscribe
+      state: "—"
+      guard: always
+      next: "([w1], 0, active)"
+      outputs: [ "open(w1)" ]
+      evidence: "windowCount.ts:72-77"
+      note: Unlike bufferCount, an output is produced before any source value arrives.
+    - id: V1
+      input: value(v)
+      state: "(windows ≠ [], count, active)"
+      guard: "¬close ∧ ¬open"
+      next: "(windows, count + 1, active)"
+      outputs: [ "w.next(v) for each open w, oldest first" ]
+      evidence: "windowCount.ts:86-88"
+      note: "close ⇔ c ≥ 0 ∧ c mod N = 0 with c = count − windowSize + 1 (lines 94-95); open ⇔ (count + 1) mod N = 0 (line 104)."
+    - id: V2
+      input: value(v)
+      state: "(windows ≠ [], count, active)"
+      guard: "close ∧ ¬open"
+      next: "(windows \\ oldest, count + 1, active)"
+      outputs: [ "w.next(v) for each open w, oldest first", "oldest.complete" ]
+      evidence: "windowCount.ts:86-88, 94-97"
+    - id: V3
+      input: value(v)
+      state: "(windows ≠ [], count, active)"
+      guard: "¬close ∧ open"
+      next: "(windows ++ [w_new], count + 1, active)"
+      outputs: [ "w.next(v) for each open w, oldest first", "open(w_new)" ]
+      evidence: "windowCount.ts:86-88, 104-108"
+      note: The new window is emitted before it has received any value (see the TODO at lines 100-103).
+    - id: V4
+      input: value(v)
+      state: "(windows ≠ [], count, active)"
+      guard: "close ∧ open"
+      next: "((windows \\ oldest) ++ [w_new], count + 1, active)"
+      outputs: [ "w.next(v) for each open w, oldest first", "oldest.complete", "open(w_new)" ]
+      evidence: "windowCount.ts:86-88, 94-97, 104-108"
+      note: The steady state of non-overlapping windows (N = windowSize) — close and open on the same value.
+    - id: V5
+      input: value(v)
+      state: "([], count, active)"
+      guard: "¬open"
+      next: "([], count + 1, active)"
+      outputs: []
+      evidence: "windowCount.ts:86 (empty loop), 104"
+      note: The value is dropped. Reachable only when N ≥ windowSize + 2.
+    - id: V6
+      input: value(v)
+      state: "([], count, active)"
+      guard: "open"
+      next: "([w_new], count + 1, active)"
+      outputs: [ "open(w_new)" ]
+      evidence: "windowCount.ts:86 (empty loop), 104-108"
+      note: The value is dropped and the next window opens for the values that follow. Reachable only when N > windowSize.
+    - id: C1
+      input: complete
+      state: "(windows, count, active)"
+      guard: always
+      next: "(∅, count, completed)"
+      outputs: [ "w.complete for each open w, oldest first", "complete" ]
+      evidence: "windowCount.ts:110-115"
+      note: A window opened on the last source value completes empty — bufferCount never emits an empty buffer.
+    - id: E1
+      input: error(e)
+      state: "(windows, count, active)"
+      guard: always
+      next: "(∅, count, errored)"
+      outputs: [ "w.error(e) for each open w, oldest first", "error(e)" ]
+      evidence: "windowCount.ts:116-121"
+    - id: F1
+      input: finalize
+      state: "any"
+      guard: always
+      next: "⊥ (windows := null, finalized)"
+      outputs: []
+      evidence: "windowCount.ts:122-125"
+      note: The unused `starts` array is released as well.
+    - id: X1
+      input: value(v)
+      state: "(·, ·, completed | errored)"
+      guard: "phase ≠ active"
+      next: "unchanged"
+      outputs: []
+      reachable: false
+      evidence: "rxjs Subscriber.ts: a stopped Subscriber (isStopped) ignores further next/error/complete calls"
+      note: Listed for totality only. RxJS subscribers never deliver inputs after a terminal notification.
+scenarios:
+  - name: overlapping-2-1
+    title: "windowCount(2, 1) — a new window on every value, each value in two windows"
+    params: { windowSize: 2, startWindowEvery: 1 }
+    source: "-a-b-c-d-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: xy-z-w-v-|
+    expectedValues: { x: w1, y: w2, z: w3, w: w4, v: w5 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V3, state: "([w1, w2], 1)", outputs: [ { kind: windowNext, label: a, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ w1, w2 ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([w2, w3], 2)", outputs: [ { kind: windowNext, label: b, window: w1 }, { kind: windowNext, label: b, window: w2 }, { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ w2, w3 ], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V4, state: "([w3, w4], 3)", outputs: [ { kind: windowNext, label: c, window: w2 }, { kind: windowNext, label: c, window: w3 }, { kind: windowComplete, window: w2 }, { kind: windowOpen, window: w4 } ], data: { phase: active, windows: [ w3, w4 ], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V4, state: "([w4, w5], 4)", outputs: [ { kind: windowNext, label: d, window: w3 }, { kind: windowNext, label: d, window: w4 }, { kind: windowComplete, window: w3 }, { kind: windowOpen, window: w5 } ], data: { phase: active, windows: [ w4, w5 ], count: 4 } }
+      - { frame: 9, kind: complete, input: complete, rule: C1, state: "(∅, 4) completed", outputs: [ { kind: windowComplete, window: w4 }, { kind: windowComplete, window: w5 }, { kind: complete } ], data: { phase: completed, count: 4 } }
+      - { frame: 9, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: non-overlapping-2
+    title: "windowCount(2) — back-to-back windows; the last window holds one value"
+    params: { windowSize: 2 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--y---z---|
+    expectedValues: { x: w1, y: w2, z: w3 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1], 1)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([w2], 2)", outputs: [ { kind: windowNext, label: b, window: w1 }, { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ w2 ], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V1, state: "([w2], 3)", outputs: [ { kind: windowNext, label: c, window: w2 } ], data: { phase: active, windows: [ w2 ], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V4, state: "([w3], 4)", outputs: [ { kind: windowNext, label: d, window: w2 }, { kind: windowComplete, window: w2 }, { kind: windowOpen, window: w3 } ], data: { phase: active, windows: [ w3 ], count: 4 } }
+      - { frame: 9, kind: value, input: value(e), rule: V1, state: "([w3], 5)", outputs: [ { kind: windowNext, label: e, window: w3 } ], data: { phase: active, windows: [ w3 ], count: 5 } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: "(∅, 5) completed", outputs: [ { kind: windowComplete, window: w3 }, { kind: complete } ], data: { phase: completed, count: 5 } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: ends-on-boundary-2
+    title: "windowCount(2) — source ends on a boundary, so w2 completes empty"
+    params: { windowSize: 2 }
+    source: "-a-b-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--y-|
+    expectedValues: { x: w1, y: w2 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1], 1)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V4, state: "([w2], 2)", outputs: [ { kind: windowNext, label: b, window: w1 }, { kind: windowComplete, window: w1 }, { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ w2 ], count: 2 } }
+      - { frame: 5, kind: complete, input: complete, rule: C1, state: "(∅, 2) completed", outputs: [ { kind: windowComplete, window: w2 }, { kind: complete } ], data: { phase: completed, count: 2 } }
+      - { frame: 5, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: gap-2-4
+    title: "windowCount(2, 4) — gap: c is dropped with no window open, d opens w2"
+    params: { windowSize: 2, startWindowEvery: 4 }
+    source: "-a-b-c-d-e-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x------y---|
+    expectedValues: { x: w1, y: w2 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1], 1)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 1 } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "([], 2)", outputs: [ { kind: windowNext, label: b, window: w1 }, { kind: windowComplete, window: w1 } ], data: { phase: active, windows: [], count: 2 } }
+      - { frame: 5, kind: value, input: value(c), rule: V5, state: "([], 3)", outputs: [], data: { phase: active, windows: [], count: 3 } }
+      - { frame: 7, kind: value, input: value(d), rule: V6, state: "([w2], 4)", outputs: [ { kind: windowOpen, window: w2 } ], data: { phase: active, windows: [ w2 ], count: 4 } }
+      - { frame: 9, kind: value, input: value(e), rule: V1, state: "([w2], 5)", outputs: [ { kind: windowNext, label: e, window: w2 } ], data: { phase: active, windows: [ w2 ], count: 5 } }
+      - { frame: 11, kind: complete, input: complete, rule: C1, state: "(∅, 5) completed", outputs: [ { kind: windowComplete, window: w2 }, { kind: complete } ], data: { phase: completed, count: 5 } }
+      - { frame: 11, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: error-mid-stream
+    title: "windowCount(2) — source errors; the open window receives the error first"
+    params: { windowSize: 2 }
+    source: "-a-#"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x--#
+    expectedValues: { x: w1 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "([w1], 1)", outputs: [ { kind: windowNext, label: a, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 1 } }
+      - { frame: 3, kind: error, input: error(#), rule: E1, state: "(∅, 1) errored", outputs: [ { kind: windowError, label: "#", window: w1 }, { kind: error, label: "#" } ], data: { phase: errored, count: 1 } }
+      - { frame: 3, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: empty-source
+    title: "windowCount(2) — empty source: w1 completes empty, then the outer stream completes"
+    params: { windowSize: 2 }
+    source: "-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: x|
+    expectedValues: { x: w1 }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: I0, state: "([w1], 0)", outputs: [ { kind: windowOpen, window: w1 } ], data: { phase: active, windows: [ w1 ], count: 0 } }
+      - { frame: 1, kind: complete, input: complete, rule: C1, state: "(∅, 0) completed", outputs: [ { kind: windowComplete, window: w1 }, { kind: complete } ], data: { phase: completed, count: 0 } }
+      - { frame: 1, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
