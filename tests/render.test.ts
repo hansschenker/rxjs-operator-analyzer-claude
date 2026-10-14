@@ -5,6 +5,7 @@ import { simulate } from '../src/core/simulator';
 import { computeCoverage } from '../src/core/table';
 import { parseOperatorYaml } from '../src/core/yaml-io';
 import { bufferCountMachine } from '../src/machines/bufferCount';
+import { debounceTimeMachine } from '../src/machines/debounceTime';
 import { windowCountMachine } from '../src/machines/windowCount';
 import { renderStandaloneHtml } from '../src/render/html';
 import { renderTimelineSvg } from '../src/render/timeline-svg';
@@ -13,6 +14,7 @@ import { join } from 'node:path';
 
 const bufferSpec = parseOperatorYaml(readFileSync(join(__dirname, '..', 'operators', 'bufferCount.yaml'), 'utf8'));
 const windowSpec = parseOperatorYaml(readFileSync(join(__dirname, '..', 'operators', 'windowCount.yaml'), 'utf8'));
+const debounceSpec = parseOperatorYaml(readFileSync(join(__dirname, '..', 'operators', 'debounceTime.yaml'), 'utf8'));
 
 /** Minimal well-formedness check: every opened tag is closed in order (SVG output is XML). */
 function assertBalanced(xml: string): void {
@@ -57,6 +59,20 @@ describe('renderTimelineSvg', () => {
     expect(svg).toContain('4.1 · w1');
     expect(svg).toContain('4.5 · w5');
     expect(svg).toContain('>I0<');
+  });
+
+  it('draws internal timer firings in the input lane for time-based operators', () => {
+    const scenario = debounceSpec.scenarios[0];
+    if (!scenario) throw new Error('scenario missing');
+    const result = simulate(debounceTimeMachine, scenario);
+    const svg = renderTimelineSvg({ operator: 'debounceTime', category: 'filtering', params: result.params, scenario, steps: result.steps });
+    assertBalanced(svg);
+    expect(result.steps.some((s) => s.kind === 'timer')).toBe(true);
+    expect(svg).toContain('>t1<');
+    expect(svg).toContain('timer(t1) fires');
+    expect(svg).toContain('>T1<');
+    expect(svg).toContain('>T2<');
+    expect(renderLaneText(scenario, result.steps)).toContain('timer(t1)');
   });
 
   it('honours a fixed frame width', () => {

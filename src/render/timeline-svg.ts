@@ -23,9 +23,13 @@ export interface TimelineInput {
 export interface RenderOptions {
   /** Fixed frame width in px; omitted = automatic (40..110 depending on label density). */
   readonly frameWidth?: number;
+  /** Upper bound for the total width in automatic mode (default 1360 px); labels get truncated instead. */
+  readonly maxWidth?: number;
   readonly showLegend?: boolean;
   readonly showTitle?: boolean;
 }
+
+const DEFAULT_MAX_WIDTH = 1360;
 
 interface Attrs {
   [key: string]: string | number | undefined;
@@ -85,6 +89,30 @@ interface OuterItem {
   readonly label: string;
   readonly kind: 'emit' | 'complete' | 'error' | 'windowOpen';
   readonly step: number;
+}
+
+/** Lane 2 item: a source marble event or an internal timer firing (both are inputs of Z). */
+interface Lane2Item {
+  readonly frame: number;
+  readonly kind: 'value' | 'complete' | 'error' | 'timer';
+  readonly label: string;
+  readonly step: number;
+}
+
+function collectLane2(source: readonly MarbleEvent[], steps: readonly TraceStep[]): Lane2Item[] {
+  const items: Lane2Item[] = source.map((e) => {
+    const wanted = e.kind === 'value' ? `value(${e.letter})` : e.kind;
+    let step = steps.findIndex((s) => s.frame === e.frame && s.kind === e.kind && s.input === wanted);
+    if (step < 0) step = steps.findIndex((s) => s.frame === e.frame && s.kind === e.kind);
+    return { frame: e.frame, kind: e.kind, label: e.letter, step };
+  });
+  steps.forEach((s, index) => {
+    if (s.kind === 'timer') {
+      items.push({ frame: s.frame, kind: 'timer', label: s.input.replace(/^timer\((.*)\)$/, '$1'), step: index });
+    }
+  });
+  const rank = (i: Lane2Item): number => (i.kind === 'timer' ? 1 : 0);
+  return items.sort((a, b) => a.frame - b.frame || rank(a) - rank(b));
 }
 
 interface WindowEvent {
@@ -183,7 +211,7 @@ function minGap(frames: readonly number[]): number {
 }
 
 function autoFrameWidth(
-  source: readonly MarbleEvent[],
+  lane2: readonly Lane2Item[],
   outer: readonly OuterItem[],
   windows: readonly WindowRow[],
   segs: readonly StateSegment[],
@@ -195,8 +223,8 @@ function autoFrameWidth(
     required = Math.max(required, Math.ceil((widest + 10) / minGap(frames)));
   };
   consider(
-    source.map((e) => e.letter),
-    source.map((e) => e.frame),
+    lane2.map((e) => e.label),
+    lane2.map((e) => e.frame),
     MONO_CHAR,
   );
   consider(
@@ -245,6 +273,7 @@ function maxStack(indexes: ReadonlyMap<unknown, number>): number {
 export function renderTimelineSvg(input: TimelineInput, options: RenderOptions = {}): string {
   const accent = accentFor(input.category);
   const source = parseMarble(input.scenario.source);
+  const lane2 = collectLane2(source, input.steps);
   const outer = collectOuter(input.steps);
   const windows = collectWindows(input.steps);
   const segs = segments(input.steps);
@@ -252,13 +281,14 @@ export function renderTimelineSvg(input: TimelineInput, options: RenderOptions =
   const showTitle = options.showTitle ?? true;
 
   const frames = Math.max(lastFrame(source), lastFrame(input.steps), lastFrame(outer)) + 2;
-  const FW = options.frameWidth ?? autoFrameWidth(source, outer, windows, segs);
+  const perFrameCap = Math.floor(((options.maxWidth ?? DEFAULT_MAX_WIDTH) - PAD_L - GUTTER - PAD_R) / frames);
+  const FW = options.frameWidth ?? Math.max(40, Math.min(autoFrameWidth(lane2, outer, windows, segs), perFrameCap));
   const x0 = PAD_L + GUTTER;
   const xEnd = x0 + frames * FW;
   const timeX = (f: number): number => x0 + f * FW + FW / 2;
   const width = xEnd + PAD_R;
 
-  const inputStack = stackIndexes(source);
+  const inputStack = stackIndexes(lane2);
   const outerStack = stackIndexes(outer);
   const hInput = H_INPUT + (maxStack(inputStack) - 1) * STACK_DY;
   const hOutput = H_OUTPUT + (maxStack(outerStack) - 1) * STACK_DY;
@@ -441,20 +471,37 @@ export function renderTimelineSvg(input: TimelineInput, options: RenderOptions =
     ]);
   };
 
-  // Lane 2: input marbles
+  const timerGlyph = (x: number, cy: number, label: string): string =>
+    el('g', {}, [
+      el('circle', { cx: x, cy, r: 10, fill: theme.white, stroke: theme.gray600, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }),
+      text(x, cy + 3, label, {
+        'font-family': theme.fontMono,
+        'font-size': 9,
+        fill: theme.gray800,
+        'text-anchor': 'middle',
+      }),
+    ]);
+
+  // Lane 2: source marbles and internal timer firings
   {
     const cy0 = laneInput.top + 30;
-    for (const e of source) {
+    for (const e of lane2) {
       const x = timeX(e.frame);
       const cy = cy0 + (inputStack.get(e) ?? 0) * STACK_DY;
-      const stepIndex = input.steps.findIndex((s) => s.frame === e.frame && s.kind === e.kind);
-      const attrs: Attrs = { class: 'input', 'data-frame': e.frame, 'data-step': stepIndex >= 0 ? stepIndex : undefined };
-      if (e.kind === 'value') {
-        parts.push(marble(x, cy, e.letter, 'input', `frame ${e.frame}: value(${e.letter})`, attrs));
-      } else if (e.kind === 'complete') {
-        parts.push(el('g', attrs, [el('title', {}, `frame ${e.frame}: complete`), completeGlyph(x, cy)]));
-      } else {
-        parts.push(el('g', attrs, [el('title', {}, `frame ${e.frame}: error`), errorGlyph(x, cy)]));
+      const attrs: Attrs = { class: e.kind === 'timer' ? 'timer' : 'input', 'data-frame': e.frame, 'data-step': e.step >= 0 ? e.step : undefined };
+      switch (e.kind) {
+        case 'value':
+          parts.push(marble(x, cy, e.label, 'input', `frame ${e.frame}: value(${e.label})`, attrs));
+          break;
+        case 'timer':
+          parts.push(el('g', attrs, [el('title', {}, `frame ${e.frame}: timer(${e.label}) fires`), timerGlyph(x, cy, e.label)]));
+          break;
+        case 'complete':
+          parts.push(el('g', attrs, [el('title', {}, `frame ${e.frame}: complete`), completeGlyph(x, cy)]));
+          break;
+        case 'error':
+          parts.push(el('g', attrs, [el('title', {}, `frame ${e.frame}: error`), errorGlyph(x, cy)]));
+          break;
       }
     }
   }
@@ -586,6 +633,7 @@ export function renderTimelineSvg(input: TimelineInput, options: RenderOptions =
       lx += advance;
     };
     item(el('circle', { cx: lx + 4, cy, r: 7, fill: theme.primaryBg, stroke: accent, 'stroke-width': 1.5 }), 'input value', 88);
+    item(el('circle', { cx: lx + 4, cy, r: 7, fill: theme.white, stroke: theme.gray600, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }), 'timer fires', 84);
     item(el('circle', { cx: lx + 4, cy, r: 7, fill: accent }), 'output value', 94);
     item(el('rect', { x: lx - 4, y: cy - 7, width: 16, height: 14, rx: 7, fill: theme.white, stroke: accent, 'stroke-width': 1.5, 'stroke-dasharray': '4 2' }), 'window opened', 104);
     item(el('rect', { x: lx - 4, y: cy - 7, width: 16, height: 14, rx: 4, fill: theme.primaryBg, stroke: accent, 'stroke-width': 1 }), 'state segment', 100);

@@ -231,6 +231,7 @@ export function laneRows(scenario: ScenarioSpec, steps: readonly TraceStep[]): L
   const windows = new Map<string, string[]>();
   for (const s of steps) {
     put(rule, s.frame, s.rule);
+    if (s.kind === 'timer') put(input, s.frame, s.input);
     if (s.kind !== 'finalize' || !state[s.frame]) state[s.frame] = s.state;
     for (const o of s.outputs) {
       const label = outerLabel(o);

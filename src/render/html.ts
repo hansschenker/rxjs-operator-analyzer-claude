@@ -95,6 +95,7 @@ export function renderLegendHtml(category: string): string {
     `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">${inner}</svg>`;
   const items: [string, string][] = [
     ['input value', icon(`<circle cx="9" cy="9" r="6.5" fill="${theme.primaryBg}" stroke="${accent}" stroke-width="1.5"/>`)],
+    ['timer fires', icon(`<circle cx="9" cy="9" r="6.5" fill="${theme.white}" stroke="${theme.gray600}" stroke-width="1.5" stroke-dasharray="3 2"/>`)],
     ['output value', icon(`<circle cx="9" cy="9" r="6.5" fill="${accent}"/>`)],
     ['window opened', icon(`<rect x="1.5" y="3" width="15" height="12" rx="6" fill="${theme.white}" stroke="${accent}" stroke-width="1.5" stroke-dasharray="3 2"/>`)],
     ['state segment', icon(`<rect x="1.5" y="3" width="15" height="12" rx="3" fill="${theme.primaryBg}" stroke="${accent}" stroke-width="1"/>`)],

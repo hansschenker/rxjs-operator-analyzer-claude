@@ -144,7 +144,11 @@ function render(): void {
     $('timeline').innerHTML = withoutTooltips(
       renderTimelineSvg(
         { operator: spec.operator, category: spec.category, params, scenario, steps },
-        { showLegend: false, ...(frameWidth === 0 ? {} : { frameWidth }) },
+        {
+          showLegend: false,
+          maxWidth: Math.max(600, $('timeline').clientWidth - 18),
+          ...(frameWidth === 0 ? {} : { frameWidth }),
+        },
       ),
     );
   }

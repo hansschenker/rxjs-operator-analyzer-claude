@@ -1,6 +1,7 @@
-import { bufferCount, windowCount, type OperatorFunction } from 'rxjs';
+import { bufferCount, debounceTime, windowCount, type OperatorFunction } from 'rxjs';
 import type { Machine } from '../core/types';
 import { bufferCountMachine } from './bufferCount';
+import { debounceTimeMachine } from './debounceTime';
 import { windowCountMachine } from './windowCount';
 
 /** A machine with its type parameters erased, for registry and CLI use. */
@@ -27,6 +28,13 @@ export const registry: Readonly<Record<string, RegistryEntry>> = {
         numberOr(params.bufferSize, 0),
         numberOr(params.startBufferEvery, null),
       ) as OperatorFunction<unknown, unknown>;
+    },
+  },
+  debounceTime: {
+    machine: debounceTimeMachine as unknown as AnyMachine,
+    higherOrder: false,
+    real(params): OperatorFunction<unknown, unknown> {
+      return debounceTime<unknown>(numberOr(params.dueTime, 0));
     },
   },
   windowCount: {

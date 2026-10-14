@@ -71,6 +71,11 @@ export interface StepResult<S> {
   readonly cancel?: readonly string[];
 }
 
+/** Virtual-time context of a step: `now` is the frame the input is delivered in (what `scheduler.now()` returns). */
+export interface StepContext {
+  readonly now: Frame;
+}
+
 /**
  * Executable Mealy machine for one operator. Pure: `step` must return fresh objects and never mutate `state`.
  * Every rule id returned here must exist in the operator's YAML transition table.
@@ -80,7 +85,7 @@ export interface Machine<S, P> {
   normalizeParams(raw: Readonly<Record<string, unknown>>): P;
   describeParams(params: P): string;
   initial(params: P): InitialResult<S>;
-  step(state: S, input: InputEvent, params: P): StepResult<S>;
+  step(state: S, input: InputEvent, params: P, context: StepContext): StepResult<S>;
   formatState(state: S, params: P): string;
   snapshot(state: S): unknown;
   isTerminal(state: S): boolean;

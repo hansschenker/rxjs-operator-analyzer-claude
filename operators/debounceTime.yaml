@@ -1,0 +1,223 @@
+# debounceTime — Mealy 6-tuple analysis (RxJS 7.8.2)
+#
+# Method: S (state space), S0 (initial state), Z (input alphabet), A (output alphabet),
+#         T : S × Z → S (transition function), G : S × Z → A* (output function).
+# The `transitions` list IS the State Transition Table. The rule ids are returned by the
+# executable model in src/machines/debounceTime.ts; `analyze` cross-checks both and writes traces.
+#
+# First time-based operator: the input alphabet gains `timer(t)`, the firing of the scheduler task
+# the operator itself scheduled. Time unit: one frame = one virtual millisecond (TestScheduler run
+# mode), so `dueTime: 3` means three frames of silence.
+operator: debounceTime
+category: filtering
+signature: "debounceTime<T>(dueTime: number, scheduler: SchedulerLike = asyncScheduler): MonoTypeOperatorFunction<T>"
+source:
+  package: rxjs
+  version: 7.8.2
+  path: src/internal/operators/debounceTime.ts
+description: |
+  Emits the most recent source value once `dueTime` has passed without another source value, and drops
+  every value that is superseded during the wait. RxJS 7 does not cancel and restart a timer on every
+  value: a single task is scheduled by the first value, and when it fires it checks whether a newer
+  value arrived meanwhile — if so it re-schedules itself for the remaining time, otherwise it emits.
+  On completion a pending value is flushed before the completion; on error it is dropped.
+parameters:
+  - name: dueTime
+    type: number
+    description: Silence required after the latest value before it is emitted, in frames (virtual ms).
+mealy:
+  stateSpace:
+    notation: "S = (lastValue: T | null, lastTime: ℕ | null, task: Timer | null) × phase,  phase ∈ {active, completed, errored, finalized}"
+    description: |
+      `lastValue` is the pending (most recent) value, `lastTime` the frame it arrived in, `task` the one
+      scheduler action that is currently armed, written t@due (its id and the frame it fires in).
+    components:
+      - { name: lastValue, type: "T | null", description: "most recent source value not yet emitted" }
+      - { name: lastTime, type: "ℕ | null", description: "frame of the most recent source value (scheduler.now())" }
+      - { name: task, type: "Timer | null", description: "the armed scheduler action (emitWhenIdle), at most one" }
+      - { name: phase, type: "active | completed | errored | finalized", description: "subscription lifecycle" }
+    invariants:
+      - "task ≠ null ⇔ lastValue ≠ null  (a value is pending exactly while a task is armed)"
+      - "at most one task is armed at any time (debounceTime.ts:103)"
+      - "a value is emitted only when now ≥ lastTime + dueTime, i.e. after dueTime frames of silence"
+      - "the emitted value is always the most recent one received; superseded values are never emitted"
+      - "after complete, error or finalize no further output is produced"
+  initialState:
+    notation: "S0 = (∅, ∅, ∅, active)"
+    description: Nothing pending and no task armed (debounceTime.ts:65-67).
+  inputAlphabet:
+    - { symbol: subscribe, description: "downstream subscribes; the operator initialises its closure state" }
+    - { symbol: value(v), description: "source emits a value (debounceTime.ts:98)" }
+    - { symbol: timer(t), description: "the armed scheduler task t fires — emitWhenIdle (debounceTime.ts:79)" }
+    - { symbol: complete, description: "source completes (debounceTime.ts:108)" }
+    - { symbol: error(e), description: "source errors; passed straight through (debounceTime.ts:115)" }
+    - { symbol: finalize, description: "subscription torn down (debounceTime.ts:116)" }
+  outputAlphabet:
+    - { symbol: emit(v), description: "subscriber.next(v) with the pending value" }
+    - { symbol: complete, description: "subscriber.complete()" }
+    - { symbol: error(e), description: "subscriber.error(e)" }
+  transitions:
+    - id: S0
+      input: subscribe
+      state: "—"
+      guard: always
+      next: "(∅, ∅, ∅, active)"
+      outputs: []
+      evidence: "debounceTime.ts:65-67"
+    - id: V1
+      input: value(v)
+      state: "(·, ·, ∅, active)"
+      guard: "no task armed"
+      next: "(v, now, t@now+dueTime, active)"
+      outputs: []
+      evidence: "debounceTime.ts:98-106"
+      note: The first value of a burst arms the only task. Later values of the burst never touch the timer (rule V2).
+    - id: V2
+      input: value(v)
+      state: "(·, ·, t, active)"
+      guard: "task armed"
+      next: "(v, now, t, active)"
+      outputs: []
+      evidence: "debounceTime.ts:98-101, 103"
+      note: Only lastValue and lastTime change; the running task re-checks the time when it fires.
+    - id: T1
+      input: timer(t)
+      state: "(v, lastTime, t, active)"
+      guard: "now < lastTime + dueTime"
+      next: "(v, lastTime, t′@lastTime+dueTime, active)"
+      outputs: []
+      evidence: "debounceTime.ts:83-89"
+      note: A newer value arrived during the wait, so the task re-schedules itself for the remaining time instead of emitting.
+    - id: T2
+      input: timer(t)
+      state: "(v, lastTime, t, active)"
+      guard: "now ≥ lastTime + dueTime"
+      next: "(∅, lastTime, ∅, active)"
+      outputs: [ "emit(v)" ]
+      evidence: "debounceTime.ts:83-85, 92, 69-77"
+      note: The silence lasted dueTime frames; the pending value is emitted and the task released.
+    - id: C1
+      input: complete
+      state: "(v, ·, t, active)"
+      guard: "task armed"
+      next: "(∅, lastTime, ∅, completed)"
+      outputs: [ "emit(v)", "complete" ]
+      evidence: "debounceTime.ts:108-112, 69-77"
+      note: The pending value is flushed immediately (the task is unsubscribed), then the stream completes.
+    - id: C2
+      input: complete
+      state: "(∅, ·, ∅, active)"
+      guard: "no task armed"
+      next: "(∅, lastTime, ∅, completed)"
+      outputs: [ "complete" ]
+      evidence: "debounceTime.ts:108-112, 70"
+    - id: E1
+      input: error(e)
+      state: "(·, ·, ·, active)"
+      guard: always
+      next: "(∅, lastTime, ∅, errored)"
+      outputs: [ "error(e)" ]
+      evidence: "debounceTime.ts:115 (error handler undefined ⇒ pass-through)"
+      note: A pending value is dropped; the armed task is cancelled by the subscriber teardown (line 105 added it to the subscriber).
+    - id: F1
+      input: finalize
+      state: "any"
+      guard: always
+      next: "⊥ (lastValue := null, activeTask := null, finalized)"
+      outputs: []
+      evidence: "debounceTime.ts:116-119"
+    - id: X1
+      input: value(v)
+      state: "(·, ·, ·, completed | errored)"
+      guard: "phase ≠ active, or a timer that is no longer the armed task"
+      next: "unchanged"
+      outputs: []
+      reachable: false
+      evidence: "rxjs Subscriber.ts: a stopped Subscriber (isStopped) ignores further next/error/complete calls; debounceTime.ts:72 unsubscribes a superseded task"
+      note: Listed for totality only.
+scenarios:
+  - name: burst-then-quiet
+    title: "debounceTime(3) — the burst a, b, c collapses to c; d is flushed by the completion"
+    params: { dueTime: 3 }
+    source: "-a-b-c-----d-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: --------x----(y|)
+    expectedValues: { x: c, y: d }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "(a, 1, t1@4)", outputs: [], data: { phase: active, lastValue: a, lastTime: 1, task: { id: t1, dueAt: 4 } } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "(b, 3, t1@4)", outputs: [], data: { phase: active, lastValue: b, lastTime: 3, task: { id: t1, dueAt: 4 } } }
+      - { frame: 4, kind: timer, input: timer(t1), rule: T1, state: "(b, 3, t2@6)", outputs: [], data: { phase: active, lastValue: b, lastTime: 3, task: { id: t2, dueAt: 6 } } }
+      - { frame: 5, kind: value, input: value(c), rule: V2, state: "(c, 5, t2@6)", outputs: [], data: { phase: active, lastValue: c, lastTime: 5, task: { id: t2, dueAt: 6 } } }
+      - { frame: 6, kind: timer, input: timer(t2), rule: T1, state: "(c, 5, t3@8)", outputs: [], data: { phase: active, lastValue: c, lastTime: 5, task: { id: t3, dueAt: 8 } } }
+      - { frame: 8, kind: timer, input: timer(t3), rule: T2, state: "(∅, 5, ∅)", outputs: [ { kind: emit, label: c } ], data: { phase: active, lastValue: null, lastTime: 5, task: null } }
+      - { frame: 11, kind: value, input: value(d), rule: V1, state: "(d, 11, t4@14)", outputs: [], data: { phase: active, lastValue: d, lastTime: 11, task: { id: t4, dueAt: 14 } } }
+      - { frame: 13, kind: complete, input: complete, rule: C1, state: "(∅, 11, ∅) completed", outputs: [ { kind: emit, label: d }, { kind: complete } ], data: { phase: completed, lastTime: 11 } }
+      - { frame: 13, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: single-value
+    title: "debounceTime(2) — one value, emitted after two frames of silence"
+    params: { dueTime: 2 }
+    source: "-a----|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x--|
+    expectedValues: { x: a }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "(a, 1, t1@3)", outputs: [], data: { phase: active, lastValue: a, lastTime: 1, task: { id: t1, dueAt: 3 } } }
+      - { frame: 3, kind: timer, input: timer(t1), rule: T2, state: "(∅, 1, ∅)", outputs: [ { kind: emit, label: a } ], data: { phase: active, lastValue: null, lastTime: 1, task: null } }
+      - { frame: 6, kind: complete, input: complete, rule: C2, state: "(∅, 1, ∅) completed", outputs: [ { kind: complete } ], data: { phase: completed, lastTime: 1 } }
+      - { frame: 6, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: spaced-values
+    title: "debounceTime(2) — values far enough apart are all emitted, the last one by the completion"
+    params: { dueTime: 2 }
+    source: "-a---b---c|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---x---y--(z|)
+    expectedValues: { x: a, y: b, z: c }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "(a, 1, t1@3)", outputs: [], data: { phase: active, lastValue: a, lastTime: 1, task: { id: t1, dueAt: 3 } } }
+      - { frame: 3, kind: timer, input: timer(t1), rule: T2, state: "(∅, 1, ∅)", outputs: [ { kind: emit, label: a } ], data: { phase: active, lastValue: null, lastTime: 1, task: null } }
+      - { frame: 5, kind: value, input: value(b), rule: V1, state: "(b, 5, t2@7)", outputs: [], data: { phase: active, lastValue: b, lastTime: 5, task: { id: t2, dueAt: 7 } } }
+      - { frame: 7, kind: timer, input: timer(t2), rule: T2, state: "(∅, 5, ∅)", outputs: [ { kind: emit, label: b } ], data: { phase: active, lastValue: null, lastTime: 5, task: null } }
+      - { frame: 9, kind: value, input: value(c), rule: V1, state: "(c, 9, t3@11)", outputs: [], data: { phase: active, lastValue: c, lastTime: 9, task: { id: t3, dueAt: 11 } } }
+      - { frame: 10, kind: complete, input: complete, rule: C1, state: "(∅, 9, ∅) completed", outputs: [ { kind: emit, label: c }, { kind: complete } ], data: { phase: completed, lastTime: 9 } }
+      - { frame: 10, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: same-frame-tie
+    title: "debounceTime(2) — value and timer in the same frame: the value is delivered first, the timer re-schedules"
+    params: { dueTime: 2 }
+    source: "-a-b---|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: -----x-|
+    expectedValues: { x: b }
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "(a, 1, t1@3)", outputs: [], data: { phase: active, lastValue: a, lastTime: 1, task: { id: t1, dueAt: 3 } } }
+      - { frame: 3, kind: value, input: value(b), rule: V2, state: "(b, 3, t1@3)", outputs: [], data: { phase: active, lastValue: b, lastTime: 3, task: { id: t1, dueAt: 3 } } }
+      - { frame: 3, kind: timer, input: timer(t1), rule: T1, state: "(b, 3, t2@5)", outputs: [], data: { phase: active, lastValue: b, lastTime: 3, task: { id: t2, dueAt: 5 } } }
+      - { frame: 5, kind: timer, input: timer(t2), rule: T2, state: "(∅, 3, ∅)", outputs: [ { kind: emit, label: b } ], data: { phase: active, lastValue: null, lastTime: 3, task: null } }
+      - { frame: 7, kind: complete, input: complete, rule: C2, state: "(∅, 3, ∅) completed", outputs: [ { kind: complete } ], data: { phase: completed, lastTime: 3 } }
+      - { frame: 7, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: error-drops-pending
+    title: "debounceTime(3) — the source errors while a is pending; a is never emitted"
+    params: { dueTime: 3 }
+    source: "-a-#"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: ---#
+    expectedValues: {}
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: value, input: value(a), rule: V1, state: "(a, 1, t1@4)", outputs: [], data: { phase: active, lastValue: a, lastTime: 1, task: { id: t1, dueAt: 4 } } }
+      - { frame: 3, kind: error, input: error(#), rule: E1, state: "(∅, 1, ∅) errored", outputs: [ { kind: error, label: "#" } ], data: { phase: errored, lastTime: 1 } }
+      - { frame: 3, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }
+  - name: empty-source
+    title: "debounceTime(3) — empty source completes without emitting"
+    params: { dueTime: 3 }
+    source: "-|"
+    # generated by `rxjs-operator-analyzer analyze` — do not edit by hand
+    expected: -|
+    expectedValues: {}
+    trace:
+      - { frame: 0, kind: subscribe, input: subscribe, rule: S0, state: "(∅, ∅, ∅)", outputs: [], data: { phase: active, lastValue: null, lastTime: null, task: null } }
+      - { frame: 1, kind: complete, input: complete, rule: C2, state: "(∅, ∅, ∅) completed", outputs: [ { kind: complete } ], data: { phase: completed, lastTime: null } }
+      - { frame: 1, kind: finalize, input: finalize, rule: F1, state: ⊥ finalized, outputs: [], data: { phase: finalized } }

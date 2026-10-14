@@ -83,16 +83,18 @@ npm run cli -- generate --check
 4. `npm run generate && npm test` — coverage and the differential tests tell you where the table and
    the implementation disagree.
 
-Time-based operators are prepared for: a machine may return `schedule: [{ id, after }]` and
-`cancel: [id]` from `step()`, and the simulator delivers `{ kind: 'timer', id }` inputs in frame order
-(after source events of the same frame).
+Time-based operators: a machine may return `schedule: [{ id, after }]` and `cancel: [id]` from
+`step()`, and the simulator delivers `{ kind: 'timer', id }` inputs in frame order, after source events
+of the same frame, exactly like RxJS's `VirtualTimeScheduler`. One frame is one virtual millisecond.
+`operators/debounceTime.yaml` is the worked example: its alphabet contains `timer(t)`, its table has
+two timer rules (re-schedule vs. emit), and lane 2 of the timeline shows the firings as dashed circles.
 
 ## Project layout
 
 ```
 operators/            the analyses: YAML state transition tables + generated traces
 src/core/             types, marble parser, simulator, zod schema, coverage, validation, YAML round-trip
-src/machines/         executable Mealy models (bufferCount, windowCount) + registry
+src/machines/         executable Mealy models (bufferCount, windowCount, debounceTime) + registry
 src/render/           4-lane SVG renderer, standalone HTML page, design tokens
 src/artifacts/        Markdown artifacts (spec, table, traces) and the test-file generator
 src/cli/              commander CLI

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>debounceTime(3) — burst-then-quiet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>:root {
+  --rxjs-color-primary: #c2185b;
+  --rxjs-color-primary-light: #d81b60;
+  --rxjs-color-primary-dark: #ad1457;
+  --rxjs-color-primary-bg: #fce4ec;
+  --rxjs-color-accent: #d32f2f;
+  --rxjs-color-surface: #ffffff;
+  --rxjs-color-background: #fafafa;
+  --rxjs-color-text: #212121;
+  --rxjs-color-text-secondary: #757575;
+  --rxjs-color-border: #e0e0e0;
+  --rxjs-color-code-bg: #1a1a2e;
+  --rxjs-color-code-text: #e0e0e0;
+  --rxjs-font-sans: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --rxjs-font-mono: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
+  --rxjs-radius-sm: 4px;
+  --rxjs-radius-md: 6px;
+  --rxjs-radius-lg: 8px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--rxjs-color-background); color: var(--rxjs-color-text); font-family: var(--rxjs-font-sans); }
+main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+h1 { font-family: var(--rxjs-font-mono); color: var(--rxjs-color-primary); font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 28px 0 8px; }
+.meta { color: var(--rxjs-color-text-secondary); font-size: 13px; margin-bottom: 16px; }
+.meta code, td code, .expected code { font-family: var(--rxjs-font-mono); background: var(--rxjs-color-primary-bg); padding: 1px 5px; border-radius: var(--rxjs-radius-sm); }
+.timeline { background: var(--rxjs-color-surface); border: 1px solid var(--rxjs-color-border); border-radius: var(--rxjs-radius-lg); padding: 8px; overflow-x: auto; }
+.timeline svg { display: block; max-width: none; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; background: var(--rxjs-color-surface); }
+th, td { border: 1px solid var(--rxjs-color-border); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: var(--rxjs-color-primary-bg); }
+td.mono, th.mono { font-family: var(--rxjs-font-mono); white-space: nowrap; }
+tr[data-rule], tr[data-step] { transition: background 120ms; }
+tr.active { background: #fff3f8; outline: 2px solid var(--rxjs-color-primary); }
+.badge { display: inline-block; font-family: var(--rxjs-font-mono); font-weight: 700; font-size: 11px; color: #fff; background: var(--rxjs-color-primary); border-radius: 999px; padding: 1px 8px; }
+.badge.unreachable { background: var(--rxjs-color-text-secondary); }
+.table-wrap { overflow-x: auto; }
+svg [data-step] { cursor: pointer; }
+svg .hl rect, svg .hl circle { filter: drop-shadow(0 0 3px rgba(194, 24, 91, 0.8)); }
+</style>
+</head>
+<body>
+<main>
+<h1>debounceTime(3)</h1>
+<div class="meta">
+<div>the burst a, b, c collapses to c; d is flushed by the completion</div>
+<div>Mealy 6-tuple analysis of <code>debounceTime</code> (filtering) — rxjs 7.8.2, <code>src/internal/operators/debounceTime.ts</code></div>
+<div>source marble: <code>-a-b-c-----d-|</code></div>
+<p class="expected">expected outer marble: <code>--------x----(y|)</code> with <code>{&quot;x&quot;:&quot;c&quot;,&quot;y&quot;:&quot;d&quot;}</code></p>
+</div>
+<div class="timeline"><svg xmlns="http://www.w3.org/2000/svg" width="1349" height="388" viewBox="0 0 1349 388" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" data-operator="debounceTime" data-scenario="burst-then-quiet"><rect x="0" y="0" width="1349" height="388" fill="#ffffff"/><text x="16" y="34" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="16" font-weight="700" fill="#9c27b0">debounceTime(3)</text><text x="16" y="52" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#757575">the burst a, b, c collapses to c; d is flushed by the completion</text><text x="1321" y="34" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" fill="#616161" text-anchor="end">source: -a-b-c-----d-|</text><rect x="16" y="64" width="1305" height="34" fill="#ffffff" stroke="#eeeeee" stroke-width="1" rx="4"/><text x="26" y="82" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="700" fill="#212121">1 · timeline</text><text x="26" y="96" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#757575">when (frames)</text><rect x="16" y="104" width="1305" height="56" fill="#fafafa" stroke="#eeeeee" stroke-width="1" rx="4"/><text x="26" y="122" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="700" fill="#212121">2 · input</text><text x="26" y="136" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#757575">what &amp; when (source)</text><rect x="16" y="166" width="1305" height="78" fill="#ffffff" stroke="#eeeeee" stroke-width="1" rx="4"/><text x="26" y="184" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="700" fill="#212121">3 · state</text><text x="26" y="198" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#757575">handling state · rule</text><rect x="16" y="250" width="1305" height="82" fill="#fafafa" stroke="#eeeeee" stroke-width="1" rx="4"/><text x="26" y="268" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="700" fill="#212121">4 · output</text><text x="26" y="282" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#757575">resulting values</text><line x1="204.5" y1="104" x2="204.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="281.5" y1="104" x2="281.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="435.5" y1="104" x2="435.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="512.5" y1="104" x2="512.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="589.5" y1="104" x2="589.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="666.5" y1="104" x2="666.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="820.5" y1="104" x2="820.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="1051.5" y1="104" x2="1051.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="1205.5" y1="104" x2="1205.5" y2="332" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3 3"/><line x1="166" y1="83" x2="1327" y2="83" stroke="#616161" stroke-width="1.5"/><path d="M 1327 79 L 1335 83 L 1327 87 Z" fill="#616161"/><line x1="204.5" y1="79" x2="204.5" y2="87" stroke="#616161" stroke-width="1"/><text x="204.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">0</text><line x1="281.5" y1="79" x2="281.5" y2="87" stroke="#616161" stroke-width="1"/><text x="281.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">1</text><line x1="358.5" y1="79" x2="358.5" y2="87" stroke="#616161" stroke-width="1"/><text x="358.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">2</text><line x1="435.5" y1="79" x2="435.5" y2="87" stroke="#616161" stroke-width="1"/><text x="435.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">3</text><line x1="512.5" y1="79" x2="512.5" y2="87" stroke="#616161" stroke-width="1"/><text x="512.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">4</text><line x1="589.5" y1="79" x2="589.5" y2="87" stroke="#616161" stroke-width="1"/><text x="589.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">5</text><line x1="666.5" y1="79" x2="666.5" y2="87" stroke="#616161" stroke-width="1"/><text x="666.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">6</text><line x1="743.5" y1="79" x2="743.5" y2="87" stroke="#616161" stroke-width="1"/><text x="743.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">7</text><line x1="820.5" y1="79" x2="820.5" y2="87" stroke="#616161" stroke-width="1"/><text x="820.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">8</text><line x1="897.5" y1="79" x2="897.5" y2="87" stroke="#616161" stroke-width="1"/><text x="897.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">9</text><line x1="974.5" y1="79" x2="974.5" y2="87" stroke="#616161" stroke-width="1"/><text x="974.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">10</text><line x1="1051.5" y1="79" x2="1051.5" y2="87" stroke="#616161" stroke-width="1"/><text x="1051.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">11</text><line x1="1128.5" y1="79" x2="1128.5" y2="87" stroke="#616161" stroke-width="1"/><text x="1128.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">12</text><line x1="1205.5" y1="79" x2="1205.5" y2="87" stroke="#616161" stroke-width="1"/><text x="1205.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">13</text><line x1="1282.5" y1="79" x2="1282.5" y2="87" stroke="#616161" stroke-width="1"/><text x="1282.5" y="75" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#616161" text-anchor="middle">14</text><g class="input" data-frame="1" data-step="1"><title>frame 1: value(a)</title><circle cx="281.5" cy="134" r="12" fill="#fce4ec" stroke="#9c27b0" stroke-width="1.5"/><text x="281.5" y="138" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="400" fill="#212121" text-anchor="middle">a</text></g><g class="input" data-frame="3" data-step="2"><title>frame 3: value(b)</title><circle cx="435.5" cy="134" r="12" fill="#fce4ec" stroke="#9c27b0" stroke-width="1.5"/><text x="435.5" y="138" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="400" fill="#212121" text-anchor="middle">b</text></g><g class="timer" data-frame="4" data-step="3"><title>frame 4: timer(t1) fires</title><g><circle cx="512.5" cy="134" r="10" fill="#ffffff" stroke="#757575" stroke-width="1.5" stroke-dasharray="3 2"/><text x="512.5" y="137" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" fill="#424242" text-anchor="middle">t1</text></g></g><g class="input" data-frame="5" data-step="4"><title>frame 5: value(c)</title><circle cx="589.5" cy="134" r="12" fill="#fce4ec" stroke="#9c27b0" stroke-width="1.5"/><text x="589.5" y="138" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="400" fill="#212121" text-anchor="middle">c</text></g><g class="timer" data-frame="6" data-step="5"><title>frame 6: timer(t2) fires</title><g><circle cx="666.5" cy="134" r="10" fill="#ffffff" stroke="#757575" stroke-width="1.5" stroke-dasharray="3 2"/><text x="666.5" y="137" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" fill="#424242" text-anchor="middle">t2</text></g></g><g class="timer" data-frame="8" data-step="6"><title>frame 8: timer(t3) fires</title><g><circle cx="820.5" cy="134" r="10" fill="#ffffff" stroke="#757575" stroke-width="1.5" stroke-dasharray="3 2"/><text x="820.5" y="137" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" fill="#424242" text-anchor="middle">t3</text></g></g><g class="input" data-frame="11" data-step="7"><title>frame 11: value(d)</title><circle cx="1051.5" cy="134" r="12" fill="#fce4ec" stroke="#9c27b0" stroke-width="1.5"/><text x="1051.5" y="138" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="400" fill="#212121" text-anchor="middle">d</text></g><g class="input" data-frame="13" data-step="8"><title>frame 13: complete</title><line x1="1205.5" y1="120" x2="1205.5" y2="148" stroke="#212121" stroke-width="3"/></g><g class="state" data-step="0" data-rule="S0" data-frame="0"><title>frame 0 · subscribe · rule S0 → (∅, ∅, ∅)</title><rect x="168" y="198" width="111.5" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="174" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(∅, ∅, ∅)</text><g class="rule-badge" data-step="0" data-rule="S0"><title>subscribe → rule S0</title><rect x="170" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="181" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">S0</text></g></g><g class="state" data-step="1" data-rule="V1" data-frame="1"><title>frame 1 · value(a) · rule V1 → (a, 1, t1@4)</title><rect x="281.5" y="198" width="152" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="287.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(a, 1, t1@4)</text><g class="rule-badge" data-step="1" data-rule="V1"><title>value(a) → rule V1</title><rect x="283.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="294.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">V1</text></g></g><g class="state" data-step="2" data-rule="V2" data-frame="3"><title>frame 3 · value(b) · rule V2 → (b, 3, t1@4)</title><rect x="435.5" y="198" width="75" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="441.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(b, 3, t1…</text><g class="rule-badge" data-step="2" data-rule="V2"><title>value(b) → rule V2</title><rect x="437.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="448.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">V2</text></g></g><g class="state" data-step="3" data-rule="T1" data-frame="4"><title>frame 4 · timer(t1) · rule T1 → (b, 3, t2@6)</title><rect x="512.5" y="198" width="75" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="518.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(b, 3, t2…</text><g class="rule-badge" data-step="3" data-rule="T1"><title>timer(t1) → rule T1</title><rect x="514.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="525.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">T1</text></g></g><g class="state" data-step="4" data-rule="V2" data-frame="5"><title>frame 5 · value(c) · rule V2 → (c, 5, t2@6)</title><rect x="589.5" y="198" width="75" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="595.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(c, 5, t2…</text><g class="rule-badge" data-step="4" data-rule="V2"><title>value(c) → rule V2</title><rect x="591.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="602.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">V2</text></g></g><g class="state" data-step="5" data-rule="T1" data-frame="6"><title>frame 6 · timer(t2) · rule T1 → (c, 5, t3@8)</title><rect x="666.5" y="198" width="152" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="672.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(c, 5, t3@8)</text><g class="rule-badge" data-step="5" data-rule="T1"><title>timer(t2) → rule T1</title><rect x="668.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="679.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">T1</text></g></g><g class="state" data-step="6" data-rule="T2" data-frame="8"><title>frame 8 · timer(t3) · rule T2 → (∅, 5, ∅)</title><rect x="820.5" y="198" width="229" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="826.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(∅, 5, ∅)</text><g class="rule-badge" data-step="6" data-rule="T2"><title>timer(t3) → rule T2</title><rect x="822.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="833.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">T2</text></g></g><g class="state" data-step="7" data-rule="V1" data-frame="11"><title>frame 11 · value(d) · rule V1 → (d, 11, t4@14)</title><rect x="1051.5" y="198" width="152" height="26" rx="5" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="1057.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(d, 11, t4@14)</text><g class="rule-badge" data-step="7" data-rule="V1"><title>value(d) → rule V1</title><rect x="1053.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="1064.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">V1</text></g></g><g class="state" data-step="8" data-rule="C1" data-frame="13"><title>frame 13 · complete · rule C1 → (∅, 11, ∅) completed
+frame 13 · finalize · rule F1 → ⊥ finalized</title><rect x="1205.5" y="198" width="115.5" height="26" rx="5" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="1" stroke-dasharray="4 3"/><text x="1211.5" y="215" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="10" fill="#212121">(∅, 11, ∅) compl…</text><g class="rule-badge" data-step="8" data-rule="C1"><title>complete → rule C1</title><rect x="1207.5" y="176" width="22" height="16" rx="8" fill="#9c27b0"/><text x="1218.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">C1</text></g><g class="rule-badge" data-step="9" data-rule="F1"><title>finalize → rule F1</title><rect x="1233.5" y="176" width="22" height="16" rx="8" fill="#757575"/><text x="1244.5" y="188" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">F1</text></g></g><g class="output" data-frame="8" data-step="6"><title>frame 8: emit(c)</title><circle cx="820.5" cy="280" r="12" fill="#9c27b0" stroke="#9c27b0" stroke-width="1.5"/><text x="820.5" y="284" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">c</text></g><g class="output" data-frame="13" data-step="8"><title>frame 13: emit(d)</title><circle cx="1205.5" cy="280" r="12" fill="#9c27b0" stroke="#9c27b0" stroke-width="1.5"/><text x="1205.5" y="284" font-family="'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">d</text></g><g class="output" data-frame="13" data-step="8"><title>frame 13: complete</title><line x1="1205.5" y1="292" x2="1205.5" y2="320" stroke="#212121" stroke-width="3"/></g><circle cx="30" cy="358" r="7" fill="#fce4ec" stroke="#9c27b0" stroke-width="1.5"/><text x="44" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">input value</text><circle cx="118" cy="358" r="7" fill="#ffffff" stroke="#757575" stroke-width="1.5" stroke-dasharray="3 2"/><text x="132" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">timer fires</text><circle cx="202" cy="358" r="7" fill="#9c27b0"/><text x="216" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">output value</text><rect x="288" y="351" width="16" height="14" rx="7" fill="#ffffff" stroke="#9c27b0" stroke-width="1.5" stroke-dasharray="4 2"/><text x="310" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">window opened</text><rect x="392" y="351" width="16" height="14" rx="4" fill="#fce4ec" stroke="#9c27b0" stroke-width="1"/><text x="414" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">state segment</text><rect x="492" y="351" width="16" height="14" rx="7" fill="#9c27b0"/><text x="514" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">rule id</text><line x1="572" y1="351" x2="572" y2="365" stroke="#212121" stroke-width="3"/><text x="586" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">complete</text><g stroke="#d32f2f" stroke-width="3" stroke-linecap="round"><line x1="643" y1="353" x2="653" y2="363"/><line x1="643" y1="363" x2="653" y2="353"/></g><text x="662" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">error</text><line x1="700" y1="358" x2="716" y2="358" stroke="#f48fb1" stroke-width="4" stroke-linecap="round"/><text x="722" y="362" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#616161">window lifetime</text></svg></div>
+<h2>Execution trace (step by step)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Frame</th><th>Input</th><th>Rule</th><th>State after</th><th>Outputs G(s, z)</th></tr></thead>
+<tbody><tr data-step="0" data-rule="S0">
+<td class="mono">0</td><td class="mono">0</td><td class="mono">subscribe</td>
+<td class="mono"><span class="badge">S0</span></td><td class="mono">(∅, ∅, ∅)</td>
+<td class="mono">none</td></tr>
+<tr data-step="1" data-rule="V1">
+<td class="mono">1</td><td class="mono">1</td><td class="mono">value(a)</td>
+<td class="mono"><span class="badge">V1</span></td><td class="mono">(a, 1, t1@4)</td>
+<td class="mono">none</td></tr>
+<tr data-step="2" data-rule="V2">
+<td class="mono">2</td><td class="mono">3</td><td class="mono">value(b)</td>
+<td class="mono"><span class="badge">V2</span></td><td class="mono">(b, 3, t1@4)</td>
+<td class="mono">none</td></tr>
+<tr data-step="3" data-rule="T1">
+<td class="mono">3</td><td class="mono">4</td><td class="mono">timer(t1)</td>
+<td class="mono"><span class="badge">T1</span></td><td class="mono">(b, 3, t2@6)</td>
+<td class="mono">none</td></tr>
+<tr data-step="4" data-rule="V2">
+<td class="mono">4</td><td class="mono">5</td><td class="mono">value(c)</td>
+<td class="mono"><span class="badge">V2</span></td><td class="mono">(c, 5, t2@6)</td>
+<td class="mono">none</td></tr>
+<tr data-step="5" data-rule="T1">
+<td class="mono">5</td><td class="mono">6</td><td class="mono">timer(t2)</td>
+<td class="mono"><span class="badge">T1</span></td><td class="mono">(c, 5, t3@8)</td>
+<td class="mono">none</td></tr>
+<tr data-step="6" data-rule="T2">
+<td class="mono">6</td><td class="mono">8</td><td class="mono">timer(t3)</td>
+<td class="mono"><span class="badge">T2</span></td><td class="mono">(∅, 5, ∅)</td>
+<td class="mono">emit(c)</td></tr>
+<tr data-step="7" data-rule="V1">
+<td class="mono">7</td><td class="mono">11</td><td class="mono">value(d)</td>
+<td class="mono"><span class="badge">V1</span></td><td class="mono">(d, 11, t4@14)</td>
+<td class="mono">none</td></tr>
+<tr data-step="8" data-rule="C1">
+<td class="mono">8</td><td class="mono">13</td><td class="mono">complete</td>
+<td class="mono"><span class="badge">C1</span></td><td class="mono">(∅, 11, ∅) completed</td>
+<td class="mono">emit(d), complete</td></tr>
+<tr data-step="9" data-rule="F1">
+<td class="mono">9</td><td class="mono">13</td><td class="mono">finalize</td>
+<td class="mono"><span class="badge">F1</span></td><td class="mono">⊥ finalized</td>
+<td class="mono">none</td></tr></tbody></table></div>
+<h2>State transition table (T and G)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>State s</th><th>Input z</th><th>Guard</th><th>T(s, z)</th><th>G(s, z)</th><th>Evidence</th><th>Fired</th></tr></thead>
+<tbody><tr data-rule="S0">
+<td class="mono"><span class="badge">S0</span></td>
+<td class="mono">—</td>
+<td class="mono">subscribe</td>
+<td>always</td>
+<td class="mono">(∅, ∅, ∅, active)</td>
+<td class="mono">none</td>
+<td>debounceTime.ts:65-67</td>
+<td>●</td>
+</tr>
+<tr data-rule="V1">
+<td class="mono"><span class="badge">V1</span></td>
+<td class="mono">(·, ·, ∅, active)</td>
+<td class="mono">value(v)</td>
+<td>no task armed</td>
+<td class="mono">(v, now, t@now+dueTime, active)</td>
+<td class="mono">none</td>
+<td>debounceTime.ts:98-106</td>
+<td>●</td>
+</tr>
+<tr data-rule="V2">
+<td class="mono"><span class="badge">V2</span></td>
+<td class="mono">(·, ·, t, active)</td>
+<td class="mono">value(v)</td>
+<td>task armed</td>
+<td class="mono">(v, now, t, active)</td>
+<td class="mono">none</td>
+<td>debounceTime.ts:98-101, 103</td>
+<td>●</td>
+</tr>
+<tr data-rule="T1">
+<td class="mono"><span class="badge">T1</span></td>
+<td class="mono">(v, lastTime, t, active)</td>
+<td class="mono">timer(t)</td>
+<td>now &lt; lastTime + dueTime</td>
+<td class="mono">(v, lastTime, t′@lastTime+dueTime, active)</td>
+<td class="mono">none</td>
+<td>debounceTime.ts:83-89</td>
+<td>●</td>
+</tr>
+<tr data-rule="T2">
+<td class="mono"><span class="badge">T2</span></td>
+<td class="mono">(v, lastTime, t, active)</td>
+<td class="mono">timer(t)</td>
+<td>now ≥ lastTime + dueTime</td>
+<td class="mono">(∅, lastTime, ∅, active)</td>
+<td class="mono">emit(v)</td>
+<td>debounceTime.ts:83-85, 92, 69-77</td>
+<td>●</td>
+</tr>
+<tr data-rule="C1">
+<td class="mono"><span class="badge">C1</span></td>
+<td class="mono">(v, ·, t, active)</td>
+<td class="mono">complete</td>
+<td>task armed</td>
+<td class="mono">(∅, lastTime, ∅, completed)</td>
+<td class="mono">emit(v); complete</td>
+<td>debounceTime.ts:108-112, 69-77</td>
+<td>●</td>
+</tr>
+<tr data-rule="C2">
+<td class="mono"><span class="badge">C2</span></td>
+<td class="mono">(∅, ·, ∅, active)</td>
+<td class="mono">complete</td>
+<td>no task armed</td>
+<td class="mono">(∅, lastTime, ∅, completed)</td>
+<td class="mono">complete</td>
+<td>debounceTime.ts:108-112, 70</td>
+<td></td>
+</tr>
+<tr data-rule="E1">
+<td class="mono"><span class="badge">E1</span></td>
+<td class="mono">(·, ·, ·, active)</td>
+<td class="mono">error(e)</td>
+<td>always</td>
+<td class="mono">(∅, lastTime, ∅, errored)</td>
+<td class="mono">error(e)</td>
+<td>debounceTime.ts:115 (error handler undefined ⇒ pass-through)</td>
+<td></td>
+</tr>
+<tr data-rule="F1">
+<td class="mono"><span class="badge">F1</span></td>
+<td class="mono">any</td>
+<td class="mono">finalize</td>
+<td>always</td>
+<td class="mono">⊥ (lastValue := null, activeTask := null, finalized)</td>
+<td class="mono">none</td>
+<td>debounceTime.ts:116-119</td>
+<td>●</td>
+</tr>
+<tr data-rule="X1">
+<td class="mono"><span class="badge unreachable">X1</span></td>
+<td class="mono">(·, ·, ·, completed | errored)</td>
+<td class="mono">value(v)</td>
+<td>phase ≠ active, or a timer that is no longer the armed task</td>
+<td class="mono">unchanged</td>
+<td class="mono">none</td>
+<td>rxjs Subscriber.ts: a stopped Subscriber (isStopped) ignores further next/error/complete calls; debounceTime.ts:72 unsubscribes a superseded task</td>
+<td></td>
+</tr></tbody></table></div>
+</main>
+<script>(() => {
+  const svg = document.querySelector('.timeline svg');
+  if (!svg) return;
+  const clear = () => {
+    document.querySelectorAll('tr.active').forEach((r) => r.classList.remove('active'));
+    svg.querySelectorAll('.hl').forEach((g) => g.classList.remove('hl'));
+  };
+  const activate = (step, rule) => {
+    clear();
+    if (rule) document.querySelectorAll('tr[data-rule="' + rule + '"]').forEach((r) => r.classList.add('active'));
+    if (step !== null) document.querySelectorAll('tr[data-step="' + step + '"]').forEach((r) => r.classList.add('active'));
+    if (step !== null) svg.querySelectorAll('[data-step="' + step + '"]').forEach((g) => g.classList.add('hl'));
+  };
+  svg.addEventListener('mouseover', (ev) => {
+    const g = ev.target.closest('[data-step]');
+    if (!g) return;
+    const step = g.getAttribute('data-step');
+    const row = document.querySelector('tr[data-step="' + step + '"]');
+    activate(step, row ? row.getAttribute('data-rule') : g.getAttribute('data-rule'));
+  });
+  svg.addEventListener('mouseleave', clear);
+  document.querySelectorAll('tr[data-step]').forEach((row) => {
+    row.addEventListener('mouseover', () => activate(row.getAttribute('data-step'), row.getAttribute('data-rule')));
+    row.addEventListener('mouseleave', clear);
+  });
+})();</script>
+</body>
+</html>

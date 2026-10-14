@@ -7,6 +7,7 @@ export * from './core/table';
 export * from './core/validate';
 export * from './core/yaml-io';
 export * from './machines/bufferCount';
+export * from './machines/debounceTime';
 export * from './machines/windowCount';
 export * from './machines/registry';
 export * from './render/theme';

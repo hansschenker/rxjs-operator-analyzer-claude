@@ -119,7 +119,7 @@ export function simulate<S, P>(
     const next = queue.shift() as Queued;
     currentFrame = next.frame;
 
-    const result = machine.step(state, next.input, params);
+    const result = machine.step(state, next.input, params, { now: next.frame });
     state = result.state;
     record(next.frame, next.input.kind, describeInput(next.input), result.ruleId, state, result.outputs);
 
@@ -152,7 +152,7 @@ export function simulate<S, P>(
   }
 
   if (terminated) {
-    const fin = machine.step(state, { kind: 'finalize' }, params);
+    const fin = machine.step(state, { kind: 'finalize' }, params, { now: currentFrame });
     state = fin.state;
     record(currentFrame, 'finalize', 'finalize', fin.ruleId, state, fin.outputs);
   }
